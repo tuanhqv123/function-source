@@ -52,25 +52,25 @@ def process_signature(img_bytes, full_name, job_title, img_width=200, img_height
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
 
-        # Vẽ thời gian ở dưới cùng, căn giữa
+        # Vẽ thời gian ở trên cùng, căn giữa
         datetime_x = (canvas_width - datetime_size[0]) / 2
-        datetime_y = canvas_height - datetime_size[1] - 10
+        datetime_y = 10
         draw.text((datetime_x, datetime_y), current_datetime, fill="black", font=font)
 
-        # Vẽ chức vụ trên thời gian, căn giữa
-        job_title_x = (canvas_width - job_title_size[0]) / 2
-        job_title_y = datetime_y - job_title_size[1] - 5
-        draw.text((job_title_x, job_title_y), job_title, fill="black", font=font)
+        # Vẽ hình chữ ký ở giữa
+        signature_x = (canvas_width - img_width) / 2
+        signature_y = datetime_y + datetime_size[1] + 10
+        canvas.paste(img, (int(signature_x), int(signature_y)), img)
 
-        # Vẽ tên đầy đủ trên chức vụ, căn giữa
+        # Vẽ tên đầy đủ dưới chữ ký, căn giữa
         name_x = (canvas_width - name_size[0]) / 2
-        name_y = job_title_y - name_size[1] - 5
+        name_y = signature_y + img_height + 10
         draw.text((name_x, name_y), full_name, fill="black", font=font)
 
-        # Vẽ hình chữ ký ở trên cùng
-        signature_x = (canvas_width - img_width) / 2
-        signature_y = 10
-        canvas.paste(img, (int(signature_x), int(signature_y)), img)
+        # Vẽ chức vụ dưới tên đầy đủ, căn giữa
+        job_title_x = (canvas_width - job_title_size[0]) / 2
+        job_title_y = name_y + name_size[1] + 5
+        draw.text((job_title_x, job_title_y), job_title, fill="black", font=font)
 
         # Lưu canvas vào bytes
         img_byte_arr = BytesIO()
@@ -130,7 +130,13 @@ def add_signature():
             signature_img = Image.open(BytesIO(processed_img_bytes))
             signature_width, signature_height = signature_img.size
 
-            # Vị trí chèn chữ ký ở góc dưới bên phải
+            # Xoay ảnh chữ ký 180 độ
+            signature_img = signature_img.rotate(180)
+            rotated_signature_bytes = BytesIO()
+            signature_img.save(rotated_signature_bytes, format='PNG')
+            rotated_signature_bytes = rotated_signature_bytes.getvalue()
+
+            # Vị trí chèn chữ ký ở góc phải bên dưới
             rect = fitz.Rect(
                 width - signature_width - 50,
                 height - signature_height - 50,
@@ -138,8 +144,8 @@ def add_signature():
                 height - 50
             )
 
-            # Chèn ảnh chữ ký vào PDF
-            page.insert_image(rect, stream=processed_img_bytes, overlay=True)
+            # Chèn ảnh chữ ký đã xoay vào PDF
+            page.insert_image(rect, stream=rotated_signature_bytes, overlay=True)
 
         pdf_document.save(output_pdf)
         pdf_document.close()
