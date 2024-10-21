@@ -111,7 +111,7 @@ def add_signature():
         processed_img_bytes = process_signature(signature_bytes, full_name, job_title)
 
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
-        output_pdf = BytesIO()
+        output_pdf = fitz.open()
 
         for page_num in range(len(pdf_document)):
             page = pdf_document[page_num]
@@ -126,19 +126,17 @@ def add_signature():
                 height - 50
             )
 
-            new_page = fitz.open()
-            new_page.new_page(width=page.rect.width, height=page.rect.height)
-            new_page.show_pdf_page(page.rect, pdf_document, page_num)
+            new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
+            new_page.show_pdf_page(page.rect, pdf_document, pno=page_num)
             new_page.insert_image(rect, stream=BytesIO(processed_img_bytes), overlay=True)
-
-            new_page.save(output_pdf)
-            new_page.close()
 
         pdf_document.close()
 
-        output_pdf.seek(0)
+        output_bytes = BytesIO(output_pdf.tobytes())
+        output_pdf.close()
+
         logging.info("Trả về file PDF đã ký")
-        return send_file(output_pdf, as_attachment=True, download_name='signed_output.pdf', mimetype='application/pdf')
+        return send_file(output_bytes, as_attachment=True, download_name='signed_output.pdf', mimetype='application/pdf')
     except Exception as e:
         logging.error(f"Lỗi trong add_signature: {e}")
         return jsonify({"error": str(e)}), 500
