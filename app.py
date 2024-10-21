@@ -132,9 +132,13 @@ def add_signature():
 
             # Xoay ảnh chữ ký 180 độ
             signature_img = signature_img.rotate(180)
-            rotated_signature_bytes = BytesIO()
-            signature_img.save(rotated_signature_bytes, format='PNG')
-            rotated_signature_bytes = rotated_signature_bytes.getvalue()
+            
+            # Lật ngược ảnh theo chiều ngang (mirror)
+            signature_img = signature_img.transpose(Image.FLIP_LEFT_RIGHT)
+            
+            modified_signature_bytes = BytesIO()
+            signature_img.save(modified_signature_bytes, format='PNG')
+            modified_signature_bytes = modified_signature_bytes.getvalue()
 
             # Vị trí chèn chữ ký ở góc phải bên dưới
             rect = fitz.Rect(
@@ -144,8 +148,8 @@ def add_signature():
                 height - 50
             )
 
-            # Chèn ảnh chữ ký đã xoay vào PDF
-            page.insert_image(rect, stream=rotated_signature_bytes, overlay=True)
+            # Chèn ảnh chữ ký đã xoay và lật ngược vào PDF
+            page.insert_image(rect, stream=modified_signature_bytes, overlay=True)
 
         pdf_document.save(output_pdf)
         pdf_document.close()
