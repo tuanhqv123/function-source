@@ -27,7 +27,8 @@ def process_signature(img_bytes, full_name, img_width=200, img_height=100, font_
         draw = ImageDraw.Draw(canvas)
 
         try:
-            font = ImageFont.truetype("Times New Roman.ttf", size=font_size)
+            font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'times.ttf')
+            font = ImageFont.truetype(font_path, size=font_size)
         except IOError:
             logging.error("Không tìm thấy font Times New Roman, sử dụng font mặc định.")
             font = ImageFont.load_default()
