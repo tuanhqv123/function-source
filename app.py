@@ -35,7 +35,6 @@ def process_signature(img_bytes, full_name, job_title, img_width=200, img_height
         # Lấy thông tin thời gian hiện tại
         current_datetime = datetime.now().strftime("%H giờ, %M phút, Ngày %d, tháng %m, năm %Y")
 
-        # Tạo một canvas đủ lớn để chứa hình chữ ký và các dòng văn bản
         # Tính toán kích thước của các dòng văn bản
         dummy_img = Image.new('RGB', (1, 1))
         dummy_draw = ImageDraw.Draw(dummy_img)
@@ -47,10 +46,9 @@ def process_signature(img_bytes, full_name, job_title, img_width=200, img_height
         name_size = (name_bbox[2] - name_bbox[0], name_bbox[3] - name_bbox[1])
         job_title_size = (job_title_bbox[2] - job_title_bbox[0], job_title_bbox[3] - job_title_bbox[1])
 
-        canvas_width = max(img_width, datetime_size[0], name_size[0], job_title_size[0]) + 40  # Thêm padding
-        canvas_height = datetime_size[1] + img_height + name_size[1] + job_title_size[1] + 60  # Thêm khoảng cách giữa các phần
-
         # Tạo canvas
+        canvas_width = max(img_width, datetime_size[0], name_size[0], job_title_size[0]) + 40
+        canvas_height = datetime_size[1] + img_height + name_size[1] + job_title_size[1] + 60
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
 
@@ -140,6 +138,7 @@ def add_signature():
                 height - 50
             )
 
+            # Chèn ảnh chữ ký vào PDF
             page.insert_image(rect, stream=processed_img_bytes, overlay=True)
 
         pdf_document.save(output_pdf)
