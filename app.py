@@ -5,24 +5,35 @@ from io import BytesIO
 import logging
 import requests
 import os
+from datetime import datetime
+import numpy as np
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-def process_signature(img_bytes, full_name, img_width=200, img_height=100, font_size=24):
+def remove_background(img):
+    img_array = np.array(img)
+    alpha = img_array[:,:,3]
+    threshold = np.array(alpha).mean() * 0.8
+    mask = alpha > threshold
+    img_array[:,:,3] = mask * 255
+    return Image.fromarray(img_array)
+
+def process_signature(img_bytes, full_name, job_title, img_scale=0.2, font_size=24):
     try:
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
-        original_width, original_height = img.size
-        aspect_ratio = original_width / original_height
-        if (img_width / img_height) > aspect_ratio:
-            img_width = int(img_height * aspect_ratio)
-        else:
-            img_height = int(img_width / aspect_ratio)
+        img = remove_background(img)
+        
+        img_width = int(img.width * img_scale)
+        img_height = int(img.height * img_scale)
         img = img.resize((img_width, img_height), Image.Resampling.LANCZOS)
 
-        canvas_height = img_height + font_size + 10
-        canvas = Image.new('RGBA', (img_width, canvas_height), (255, 255, 255, 0))
-        canvas.paste(img, (0, 0), img)
+        canvas_width = max(img_width, 400)
+        canvas_height = img_height + 180
+        canvas = Image.new('RGBA', (canvas_width, canvas_height), (255, 255, 255, 0))
+        
+        signature_position = ((canvas_width - img_width) // 2, 0)
+        canvas.paste(img, signature_position, img)
 
         draw = ImageDraw.Draw(canvas)
 
@@ -33,11 +44,21 @@ def process_signature(img_bytes, full_name, img_width=200, img_height=100, font_
             logging.error("Không tìm thấy font Times New Roman, sử dụng font mặc định.")
             font = ImageFont.load_default()
 
-        bbox = draw.textbbox((0, 0), full_name, font=font)
-        text_width = bbox[2] - bbox[0]
+        current_datetime = datetime.now().strftime("%H giờ, %M phút, Ngày %d, tháng %m, năm %Y")
+        date_bbox = draw.textbbox((0, 0), current_datetime, font=font)
+        date_width = date_bbox[2] - date_bbox[0]
+        date_position = ((canvas_width - date_width) / 2, img_height + 10)
+        draw.text(date_position, current_datetime, fill="black", font=font)
 
-        text_position = ((img_width - text_width) / 2, img_height + 5)
-        draw.text(text_position, full_name, fill="black", font=font)
+        name_bbox = draw.textbbox((0, 0), full_name, font=font)
+        name_width = name_bbox[2] - name_bbox[0]
+        name_position = ((canvas_width - name_width) / 2, img_height + 50)
+        draw.text(name_position, full_name, fill="black", font=font)
+
+        job_bbox = draw.textbbox((0, 0), job_title, font=font)
+        job_width = job_bbox[2] - job_bbox[0]
+        job_position = ((canvas_width - job_width) / 2, img_height + 90)
+        draw.text(job_position, job_title, fill="black", font=font)
 
         img_byte_arr = BytesIO()
         canvas.save(img_byte_arr, format='PNG')
