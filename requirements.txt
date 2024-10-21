@@ -1,0 +1,5 @@
+Flask
+PyMuPDF
+Pillow
+requests
+gunicorn
