@@ -12,6 +12,9 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 def remove_background(img):
+    if img.format == 'PNG':
+        return img
+    
     img_array = np.array(img)
     alpha = img_array[:, :, 3]
     threshold = np.array(alpha).mean() * 0.8
@@ -19,7 +22,7 @@ def remove_background(img):
     img_array[:, :, 3] = mask * 255
     return Image.fromarray(img_array)
 
-def process_signature(img_bytes, full_name, job_title, img_scale=0.2, font_size=24):
+def process_signature(img_bytes, full_name, job_title, img_scale=0.2, font_size=36):
     try:
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
         img = remove_background(img)
@@ -28,8 +31,8 @@ def process_signature(img_bytes, full_name, job_title, img_scale=0.2, font_size=
         img_height = int(img.height * img_scale)
         img = img.resize((img_width, img_height), Image.Resampling.LANCZOS)
 
-        canvas_width = max(img_width, 400)
-        canvas_height = img_height + 180
+        canvas_width = max(img_width, 500)
+        canvas_height = img_height + 200
         canvas = Image.new('RGBA', (canvas_width, canvas_height), (255, 255, 255, 0))
         
         signature_position = ((canvas_width - img_width) // 2, 0)
@@ -47,17 +50,17 @@ def process_signature(img_bytes, full_name, job_title, img_scale=0.2, font_size=
         current_datetime = datetime.now().strftime("%H giờ, %M phút, Ngày %d, tháng %m, năm %Y")
         date_bbox = draw.textbbox((0, 0), current_datetime, font=font)
         date_width = date_bbox[2] - date_bbox[0]
-        date_position = ((canvas_width - date_width) / 2, img_height + 10)
+        date_position = ((canvas_width - date_width) / 2, img_height + 20)
         draw.text(date_position, current_datetime, fill="black", font=font)
 
         name_bbox = draw.textbbox((0, 0), full_name, font=font)
         name_width = name_bbox[2] - name_bbox[0]
-        name_position = ((canvas_width - name_width) / 2, img_height + 50)
+        name_position = ((canvas_width - name_width) / 2, img_height + 70)
         draw.text(name_position, full_name, fill="black", font=font)
 
         job_bbox = draw.textbbox((0, 0), job_title, font=font)
         job_width = job_bbox[2] - job_bbox[0]
-        job_position = ((canvas_width - job_width) / 2, img_height + 90)
+        job_position = ((canvas_width - job_width) / 2, img_height + 120)
         draw.text(job_position, job_title, fill="black", font=font)
 
         img_byte_arr = BytesIO()
