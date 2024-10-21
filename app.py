@@ -6,40 +6,25 @@ import logging
 import requests
 import os
 from datetime import datetime
-import numpy as np
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-def remove_background(img):
-    if img.format == 'PNG':
-        return img
-    
-    img_array = np.array(img)
-    alpha = img_array[:, :, 3]
-    threshold = np.array(alpha).mean() * 0.8
-    mask = alpha > threshold
-    img_array[:, :, 3] = mask * 255
-    return Image.fromarray(img_array)
-
-def process_signature(img_bytes, full_name, job_title, img_scale=0.4, font_size=36):
+def process_signature(img_bytes, full_name, job_title, img_width=200, img_height=100, font_size=24):
     try:
+        # Mở hình ảnh chữ ký
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
-        img = remove_background(img)
-        
-        img_width = int(img.width * img_scale)
-        img_height = int(img.height * img_scale)
-        img = img.resize((img_width, img_height), Image.Resampling.LANCZOS)
 
-        canvas_width = max(img_width, 600)
-        canvas_height = img_height + 150
-        canvas = Image.new('RGBA', (canvas_width, canvas_height), (255, 255, 255, 0))
-        
-        signature_position = (50, 0)
-        canvas.paste(img, signature_position, img)
+        # Thay đổi kích thước hình chữ ký, giữ nguyên tỷ lệ
+        original_width, original_height = img.size
+        aspect_ratio = original_width / original_height
+        if (img_width / img_height) > aspect_ratio:
+            img_width = int(img_height * aspect_ratio)
+        else:
+            img_height = int(img_width / aspect_ratio)
+        img = img.resize((int(img_width), int(img_height)), Image.Resampling.LANCZOS)
 
-        draw = ImageDraw.Draw(canvas)
-
+        # Tải font chữ
         try:
             font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'times.ttf')
             font = ImageFont.truetype(font_path, size=font_size)
@@ -47,24 +32,48 @@ def process_signature(img_bytes, full_name, job_title, img_scale=0.4, font_size=
             logging.error("Không tìm thấy font Times New Roman, sử dụng font mặc định.")
             font = ImageFont.load_default()
 
+        # Lấy thông tin thời gian hiện tại
         current_datetime = datetime.now().strftime("%H giờ, %M phút, Ngày %d, tháng %m, năm %Y")
-        date_bbox = draw.textbbox((0, 0), current_datetime, font=font)
-        date_width = date_bbox[2] - date_bbox[0]
-        date_position = (canvas_width - date_width - 50, img_height + 20)
-        draw.text(date_position, current_datetime, fill="black", font=font)
 
-        name_bbox = draw.textbbox((0, 0), full_name, font=font)
-        name_width = name_bbox[2] - name_bbox[0]
-        name_position = (canvas_width - name_width - 50, img_height + 60)
-        draw.text(name_position, full_name, fill="black", font=font)
+        # Tạo một canvas đủ lớn để chứa hình chữ ký và các dòng văn bản
+        # Tính toán kích thước của các dòng văn bản
+        dummy_img = Image.new('RGB', (1, 1))
+        dummy_draw = ImageDraw.Draw(dummy_img)
+        datetime_size = dummy_draw.textsize(current_datetime, font=font)
+        name_size = dummy_draw.textsize(full_name, font=font)
+        job_title_size = dummy_draw.textsize(job_title, font=font)
 
-        job_bbox = draw.textbbox((0, 0), job_title, font=font)
-        job_width = job_bbox[2] - job_bbox[0]
-        job_position = (canvas_width - job_width - 50, img_height + 100)
-        draw.text(job_position, job_title, fill="black", font=font)
+        canvas_width = max(img_width, datetime_size[0], name_size[0], job_title_size[0]) + 40  # Thêm padding
+        canvas_height = datetime_size[1] + img_height + name_size[1] + job_title_size[1] + 60  # Thêm khoảng cách giữa các phần
 
+        # Tạo canvas
+        canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(canvas)
+
+        # Vẽ thời gian ở trên cùng, căn giữa
+        datetime_x = (canvas_width - datetime_size[0]) / 2
+        datetime_y = 10
+        draw.text((datetime_x, datetime_y), current_datetime, fill="black", font=font)
+
+        # Vẽ hình chữ ký ở giữa
+        signature_x = (canvas_width - img_width) / 2
+        signature_y = datetime_y + datetime_size[1] + 10
+        canvas.paste(img, (int(signature_x), int(signature_y)), img)
+
+        # Vẽ tên đầy đủ dưới chữ ký, căn giữa
+        name_x = (canvas_width - name_size[0]) / 2
+        name_y = signature_y + img_height + 10
+        draw.text((name_x, name_y), full_name, fill="black", font=font)
+
+        # Vẽ chức vụ dưới tên đầy đủ, căn giữa
+        job_title_x = (canvas_width - job_title_size[0]) / 2
+        job_title_y = name_y + name_size[1] + 5
+        draw.text((job_title_x, job_title_y), job_title, fill="black", font=font)
+
+        # Lưu canvas vào bytes
         img_byte_arr = BytesIO()
         canvas.save(img_byte_arr, format='PNG')
+
         return img_byte_arr.getvalue()
     except Exception as e:
         logging.error(f"Lỗi trong process_signature: {e}")
@@ -98,8 +107,8 @@ def add_signature():
 
         job_title = request.form.get('job_title')
         if not job_title:
-            logging.error("Không nhận được chức danh")
-            return jsonify({"error": "Không nhận được chức danh"}), 400
+            logging.error("Không nhận được chức vụ")
+            return jsonify({"error": "Không nhận được chức vụ"}), 400
 
         logging.info(f"Nhận URL PDF: {pdf_url}")
         pdf_stream = download_file(pdf_url)
@@ -119,6 +128,7 @@ def add_signature():
             signature_img = Image.open(BytesIO(processed_img_bytes))
             signature_width, signature_height = signature_img.size
 
+            # Vị trí chèn chữ ký ở góc dưới bên phải
             rect = fitz.Rect(
                 width - signature_width - 50,
                 height - signature_height - 50,
