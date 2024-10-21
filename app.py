@@ -39,9 +39,13 @@ def process_signature(img_bytes, full_name, job_title, img_width=200, img_height
         # Tính toán kích thước của các dòng văn bản
         dummy_img = Image.new('RGB', (1, 1))
         dummy_draw = ImageDraw.Draw(dummy_img)
-        datetime_size = dummy_draw.textsize(current_datetime, font=font)
-        name_size = dummy_draw.textsize(full_name, font=font)
-        job_title_size = dummy_draw.textsize(job_title, font=font)
+        datetime_bbox = dummy_draw.textbbox((0, 0), current_datetime, font=font)
+        name_bbox = dummy_draw.textbbox((0, 0), full_name, font=font)
+        job_title_bbox = dummy_draw.textbbox((0, 0), job_title, font=font)
+
+        datetime_size = (datetime_bbox[2] - datetime_bbox[0], datetime_bbox[3] - datetime_bbox[1])
+        name_size = (name_bbox[2] - name_bbox[0], name_bbox[3] - name_bbox[1])
+        job_title_size = (job_title_bbox[2] - job_title_bbox[0], job_title_bbox[3] - job_title_bbox[1])
 
         canvas_width = max(img_width, datetime_size[0], name_size[0], job_title_size[0]) + 40  # Thêm padding
         canvas_height = datetime_size[1] + img_height + name_size[1] + job_title_size[1] + 60  # Thêm khoảng cách giữa các phần
