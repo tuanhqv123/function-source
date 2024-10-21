@@ -1,16 +1,17 @@
-from flask import Flask, request, jsonify, send_file
-import fitz  # PyMuPDF
-from PIL import Image, ImageDraw, ImageFont
-from io import BytesIO
-import logging
-import requests
 import os
+import logging
+from io import BytesIO
 from datetime import datetime
+from flask import Flask, request, jsonify, send_file
+from PIL import Image, ImageDraw, ImageFont
+import fitz  # PyMuPDF
 
 app = Flask(__name__)
+
+# Cấu hình logging
 logging.basicConfig(level=logging.INFO)
 
-def process_signature(img_bytes, full_name, job_title, img_width=200, img_height=100, font_size=24):
+def process_signature(img_bytes, full_name, job_title, img_width=400, img_height=200, font_size=36):
     try:
         # Mở hình ảnh chữ ký
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
@@ -47,29 +48,29 @@ def process_signature(img_bytes, full_name, job_title, img_width=200, img_height
         job_title_size = (job_title_bbox[2] - job_title_bbox[0], job_title_bbox[3] - job_title_bbox[1])
 
         # Tạo canvas
-        canvas_width = max(img_width, datetime_size[0], name_size[0], job_title_size[0]) + 40
-        canvas_height = datetime_size[1] + img_height + name_size[1] + job_title_size[1] + 60
+        canvas_width = max(img_width, datetime_size[0], name_size[0], job_title_size[0]) + 80
+        canvas_height = datetime_size[1] + img_height + name_size[1] + job_title_size[1] + 120
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
 
         # Vẽ thời gian ở trên cùng, căn giữa
         datetime_x = (canvas_width - datetime_size[0]) / 2
-        datetime_y = 10
+        datetime_y = 20
         draw.text((datetime_x, datetime_y), current_datetime, fill="black", font=font)
 
         # Vẽ hình chữ ký ở giữa
         signature_x = (canvas_width - img_width) / 2
-        signature_y = datetime_y + datetime_size[1] + 10
+        signature_y = datetime_y + datetime_size[1] + 20
         canvas.paste(img, (int(signature_x), int(signature_y)), img)
 
         # Vẽ tên đầy đủ dưới chữ ký, căn giữa
         name_x = (canvas_width - name_size[0]) / 2
-        name_y = signature_y + img_height + 10
+        name_y = signature_y + img_height + 20
         draw.text((name_x, name_y), full_name, fill="black", font=font)
 
         # Vẽ chức vụ dưới tên đầy đủ, căn giữa
         job_title_x = (canvas_width - job_title_size[0]) / 2
-        job_title_y = name_y + name_size[1] + 5
+        job_title_y = name_y + name_size[1] + 10
         draw.text((job_title_x, job_title_y), job_title, fill="black", font=font)
 
         # Lưu canvas vào bytes
@@ -81,46 +82,27 @@ def process_signature(img_bytes, full_name, job_title, img_width=200, img_height
         logging.error(f"Lỗi trong process_signature: {e}")
         raise
 
-def download_file(url):
-    try:
-        logging.info(f"Đang tải file từ URL: {url}")
-        response = requests.get(url)
-        response.raise_for_status()
-        return BytesIO(response.content)
-    except Exception as e:
-        logging.error(f"Lỗi khi tải file từ URL {url}: {e}")
-        raise
-
 @app.route('/add_signature', methods=['POST'])
 def add_signature():
     logging.info("Nhận yêu cầu tới /add_signature")
     try:
-        pdf_url = request.form.get('pdf_url')
-        signature_url = request.form.get('signature_url')
+        # Nhận file PDF và thông tin chữ ký từ request
+        if 'pdf' not in request.files or 'signature' not in request.files:
+            return jsonify({"error": "Thiếu file PDF hoặc chữ ký"}), 400
 
-        if not pdf_url or not signature_url:
-            logging.error("Không nhận được URL PDF hoặc URL chữ ký")
-            return jsonify({"error": "Không nhận được URL PDF hoặc URL chữ ký"}), 400
+        pdf_file = request.files['pdf']
+        signature_file = request.files['signature']
+        full_name = request.form.get('full_name', 'Người ký')
+        job_title = request.form.get('job_title', 'Chức vụ')
 
-        full_name = request.form.get('full_name')
-        if not full_name:
-            logging.error("Không nhận được tên đầy đủ")
-            return jsonify({"error": "Không nhận được tên đầy đủ"}), 400
+        # Đọc nội dung của các file
+        pdf_stream = pdf_file.read()
+        signature_bytes = signature_file.read()
 
-        job_title = request.form.get('job_title')
-        if not job_title:
-            logging.error("Không nhận được chức vụ")
-            return jsonify({"error": "Không nhận được chức vụ"}), 400
-
-        logging.info(f"Nhận URL PDF: {pdf_url}")
-        pdf_stream = download_file(pdf_url)
-
-        logging.info(f"Nhận URL chữ ký: {signature_url}")
-        signature_stream = download_file(signature_url)
-        signature_bytes = signature_stream.read()
-
+        # Xử lý chữ ký
         processed_img_bytes = process_signature(signature_bytes, full_name, job_title)
 
+        # Mở PDF và thêm chữ ký
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = BytesIO()
 
@@ -128,6 +110,12 @@ def add_signature():
             page = pdf_document[page_num]
             width, height = page.rect.width, page.rect.height
             signature_img = Image.open(BytesIO(processed_img_bytes))
+            
+            # Tăng kích thước chữ ký
+            new_width = int(width * 0.4)  # 40% chiều rộng trang
+            new_height = int(new_width * signature_img.size[1] / signature_img.size[0])
+            signature_img = signature_img.resize((new_width, new_height), Image.LANCZOS)
+            
             signature_width, signature_height = signature_img.size
 
             # Xoay ảnh chữ ký 180 độ
@@ -141,11 +129,13 @@ def add_signature():
             modified_signature_bytes = modified_signature_bytes.getvalue()
 
             # Vị trí chèn chữ ký ở góc phải bên dưới
+            margin_right = 30  # Khoảng cách từ mép phải trang
+            margin_bottom = 30  # Khoảng cách từ mép dưới trang
             rect = fitz.Rect(
-                width - signature_width - 50,
-                height - signature_height - 50,
-                width - 50,
-                height - 50
+                width - signature_width - margin_right,
+                height - signature_height - margin_bottom,
+                width - margin_right,
+                height - margin_bottom
             )
 
             # Chèn ảnh chữ ký đã xoay và lật ngược vào PDF
@@ -161,6 +151,5 @@ def add_signature():
         logging.error(f"Lỗi trong add_signature: {e}")
         return jsonify({"error": str(e)}), 500
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+if __name__ == '__main__':
+    app.run(debug=True)
