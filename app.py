@@ -6,6 +6,7 @@ import logging
 import requests
 import os
 from datetime import datetime
+from pytz import timezone
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -29,7 +30,9 @@ def process_signature(img_bytes, full_name, job_title, img_width=125, img_height
             logging.error("Không tìm thấy font Times New Roman, sử dụng font mặc định.")
             font = ImageFont.load_default()
 
-        current_datetime = datetime.now().strftime("%H giờ, %M phút, Ngày %d, tháng %m, năm %Y")
+        # Sử dụng múi giờ Việt Nam
+        vietnam_tz = timezone('Asia/Ho_Chi_Minh')
+        current_datetime = datetime.now(vietnam_tz).strftime("%H giờ, %M phút, Ngày %d, tháng %m, năm %Y")
 
         dummy_img = Image.new('RGB', (1, 1))
         dummy_draw = ImageDraw.Draw(dummy_img)
