@@ -13,10 +13,10 @@ logging.basicConfig(level=logging.INFO)
 
 def remove_background(img):
     img_array = np.array(img)
-    alpha = img_array[:,:,3]
+    alpha = img_array[:, :, 3]
     threshold = np.array(alpha).mean() * 0.8
     mask = alpha > threshold
-    img_array[:,:,3] = mask * 255
+    img_array[:, :, 3] = mask * 255
     return Image.fromarray(img_array)
 
 def process_signature(img_bytes, full_name, job_title, img_scale=0.2, font_size=24):
@@ -93,6 +93,11 @@ def add_signature():
             logging.error("Không nhận được tên đầy đủ")
             return jsonify({"error": "Không nhận được tên đầy đủ"}), 400
 
+        job_title = request.form.get('job_title')
+        if not job_title:
+            logging.error("Không nhận được chức danh")
+            return jsonify({"error": "Không nhận được chức danh"}), 400
+
         logging.info(f"Nhận URL PDF: {pdf_url}")
         pdf_stream = download_file(pdf_url)
 
@@ -100,7 +105,7 @@ def add_signature():
         signature_stream = download_file(signature_url)
         signature_bytes = signature_stream.read()
 
-        processed_img_bytes = process_signature(signature_bytes, full_name)
+        processed_img_bytes = process_signature(signature_bytes, full_name, job_title)
 
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = BytesIO()
