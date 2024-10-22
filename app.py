@@ -11,7 +11,7 @@ from pytz import timezone
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-def process_signature(img_bytes, full_name, job_title, img_width=125, img_height=100, font_size=12):
+def process_signature(img_bytes, full_name, job_title, img_width=250, img_height=100, font_size=12):
     try:
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
 
