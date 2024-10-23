@@ -128,23 +128,33 @@ def add_signature():
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = fitz.open()
 
+        placeholder_text = "ký tại đây"  # Text to search for
+
         for page_num in range(len(pdf_document)):
             page = pdf_document[page_num]
-            width, height = page.rect.width, page.rect.height
-            signature_img = Image.open(BytesIO(processed_img_bytes))
-            signature_width, signature_height = signature_img.size
 
-            # Xác định vị trí chữ ký (cỡ chữ ký đã được điều chỉnh)
-            rect = fitz.Rect(
-                width - signature_width - 20,  # Lùi 20 điểm từ lề phải
-                height - signature_height - 50,  # Lùi 50 điểm từ đáy
-                width - 20,  # Lề phải
-                height - 50  # Vị trí y cố định
-            )
+            # Search for the placeholder text on the current page
+            text_instances = page.search_for(placeholder_text)
 
             new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
             new_page.show_pdf_page(page.rect, pdf_document, pno=page_num)
-            new_page.insert_image(rect, stream=BytesIO(processed_img_bytes), overlay=True)
+
+            if text_instances:
+                logging.info(f"Found {len(text_instances)} instances of '{placeholder_text}' on page {page_num + 1}")
+                signature_img = Image.open(BytesIO(processed_img_bytes))
+                signature_width, signature_height = signature_img.size
+
+                for rect in text_instances:
+                    # Adjust the rectangle where the signature will be placed
+                    signature_rect = fitz.Rect(
+                        rect.x0,  # Left of the found text
+                        rect.y0,  # Top of the found text
+                        rect.x0 + signature_width,  # Right edge of the signature
+                        rect.y0 + signature_height  # Bottom edge of the signature
+                    )
+
+                    # Insert the signature image at the found text location
+                    new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=True)
 
         pdf_document.close()
 
