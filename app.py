@@ -15,6 +15,18 @@ def process_signature(img_bytes, full_name, job_title, img_width=350, img_height
     try:
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
 
+        # Tách nền trắng và chuyển chữ ký thành màu đỏ
+        datas = img.getdata()
+        newData = []
+        for item in datas:
+            # Kiểm tra nếu pixel gần màu trắng để làm trong suốt
+            if item[0] > 240 and item[1] > 240 and item[2] > 240:
+                newData.append((255, 0, 0, 0))  # Trong suốt với màu đỏ không ảnh hưởng vì alpha=0
+            else:
+                # Chuyển đổi màu chữ ký thành đỏ, giữ nguyên độ trong suốt
+                newData.append((255, 0, 0, item[3]))
+        img.putdata(newData)
+
         original_width, original_height = img.size
         aspect_ratio = original_width / original_height
         if (img_width / img_height) > aspect_ratio:
@@ -122,11 +134,12 @@ def add_signature():
             signature_img = Image.open(BytesIO(processed_img_bytes))
             signature_width, signature_height = signature_img.size
 
+            # Xác định vị trí chữ ký (cỡ chữ ký đã được điều chỉnh)
             rect = fitz.Rect(
-                width - signature_width,
-                height - signature_height,
-                width + 20,
-                height - 50
+                width - signature_width - 20,  # Lùi 20 điểm từ lề phải
+                height - signature_height - 50,  # Lùi 50 điểm từ đáy
+                width - 20,  # Lề phải
+                height - 50  # Vị trí y cố định
             )
 
             new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
@@ -139,11 +152,16 @@ def add_signature():
         output_pdf.close()
 
         logging.info("Trả về file PDF đã ký")
-        return send_file(output_bytes, as_attachment=True, download_name='signed_output.pdf', mimetype='application/pdf')
+        return send_file(
+            output_bytes,
+            as_attachment=True,
+            download_name='signed_output.pdf',
+            mimetype='application/pdf'
+        )
     except Exception as e:
         logging.error(f"Lỗi trong add_signature: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 4000))
     app.run(host='0.0.0.0', port=port)
