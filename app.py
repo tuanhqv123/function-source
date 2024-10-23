@@ -35,12 +35,13 @@ def process_signature(img_bytes, full_name, job_title, img_width=350, img_height
             img_height = int(img_width / aspect_ratio)
         img = img.resize((int(img_width), int(img_height)), Image.Resampling.LANCZOS)
 
+        # Load the font (use fallback if Times New Roman not found)
         try:
             font_path = os.path.join('fonts', 'times.ttf')
             font = ImageFont.truetype(font_path, size=font_size)
         except IOError:
             logging.error("Không tìm thấy font Times New Roman, sử dụng font mặc định.")
-            font = ImageFont.load_default()
+            font = ImageFont.truetype("DejaVuSerif.ttf", size=font_size)  # Fallback to DejaVuSerif
 
         # Sử dụng múi giờ Việt Nam
         vietnam_tz = timezone('Asia/Ho_Chi_Minh')
@@ -145,6 +146,9 @@ def add_signature():
                 signature_width, signature_height = signature_img.size
 
                 for rect in text_instances:
+                    # Erase the placeholder text by drawing a white rectangle over it
+                    new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))  # White rectangle to cover the text
+
                     # Adjust the rectangle where the signature will be placed
                     signature_rect = fitz.Rect(
                         rect.x0,  # Left of the found text
