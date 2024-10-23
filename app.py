@@ -41,7 +41,7 @@ def process_signature(img_bytes, full_name, job_title, img_width=350, img_height
             font = ImageFont.truetype(font_path, size=font_size)
         except IOError:
             logging.error("Không tìm thấy font Times New Roman, sử dụng font mặc định.")
-            font = ImageFont.truetype("DejaVuSerif.ttf", size=font_size)  # Fallback to DejaVuSerif
+            font = ImageFont.truetype("DejaVuSans.ttf", size=font_size)  # Fallback to DejaVuSans
 
         # Sử dụng múi giờ Việt Nam
         vietnam_tz = timezone('Asia/Ho_Chi_Minh')
@@ -90,6 +90,7 @@ def download_file(url):
     try:
         logging.info(f"Đang tải file từ URL: {url}")
         response = requests.get(url)
+        logging.info(f"HTTP Status Code: {response.status_code}")
         response.raise_for_status()
         return BytesIO(response.content)
     except Exception as e:
@@ -158,7 +159,7 @@ def add_signature():
                     )
 
                     # Insert the signature image at the found text location
-                    new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=True)
+                    new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=False)
 
         pdf_document.close()
 
