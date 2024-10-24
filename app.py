@@ -23,7 +23,11 @@ def get_font_path(font_name):
         return None
     return font_path
 
-def process_signature(img_bytes, full_name, job_title, img_width=350, img_height=120, font_size=12):
+def process_signature(img_bytes, full_name, job_title, img_width=300, img_height=100, font_size=11):
+    """
+    Xử lý ảnh chữ ký: chuyển nền trắng thành trong suốt, chuyển màu chữ ký thành đỏ, resize ảnh,
+    thêm thông tin tên và chức vụ vào ảnh tạo thành ảnh chữ ký hoàn chỉnh.
+    """
     try:
         logging.info("Bắt đầu xử lý chữ ký")
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
@@ -86,7 +90,7 @@ def process_signature(img_bytes, full_name, job_title, img_width=350, img_height
         job_title_size = (job_title_bbox[2] - job_title_bbox[0], job_title_bbox[3] - job_title_bbox[1])
 
         canvas_width = max(img_width, datetime_size[0], name_size[0], job_title_size[0]) + 40
-        canvas_height = datetime_size[1] + img_height + name_size[1] + job_title_size[1] + 60
+        canvas_height = datetime_size[1] + img_height + name_size[1] + job_title_size[1] + 70
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
 
@@ -107,7 +111,7 @@ def process_signature(img_bytes, full_name, job_title, img_width=350, img_height
         draw.text((job_title_x, job_title_y), job_title, fill="black", font=font)
 
         img_byte_arr = BytesIO()
-        canvas.save(img_byte_arr, format='PNG')
+        canvas.save(img_byte_arr, format='PNG', quality=100)
         logging.info("Chữ ký đã được xử lý và tạo thành công.")
 
         return img_byte_arr.getvalue()
@@ -123,6 +127,13 @@ def download_file(url):
         url_no_fragment = urlunsplit((split_url.scheme, split_url.netloc, split_url.path, split_url.query, ''))
         response = requests.get(url_no_fragment)
         response.raise_for_status()
+
+        content_type = response.headers.get('Content-Type', '')
+        logging.info(f"Content-Type của phản hồi: {content_type}")
+        if 'application/pdf' not in content_type:
+            logging.error(f"URL không trả về PDF: {url_no_fragment}")
+            raise ValueError("URL không trả về PDF")
+
         logging.info(f"Tải file từ URL: {url_no_fragment} thành công.")
         return BytesIO(response.content)
     except Exception as e:
@@ -169,7 +180,7 @@ def add_signature():
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = fitz.open()
 
-        placeholder_text = "Signature"  # Text to search for
+        placeholder_text = "ký tại đây"  # Text to search for
 
         for page_num in range(len(pdf_document)):
             page = pdf_document.load_page(page_num)
