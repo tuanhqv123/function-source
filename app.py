@@ -169,7 +169,7 @@ def add_signature():
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = fitz.open()
 
-        placeholder_text = "ký tại đây"  # Text to search for
+        placeholder_text = "Signature"  # Text to search for
 
         for page_num in range(len(pdf_document)):
             page = pdf_document.load_page(page_num)
