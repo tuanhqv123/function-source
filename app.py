@@ -7,6 +7,7 @@ import requests
 import os
 from datetime import datetime
 from pytz import timezone
+from urllib.parse import urlsplit, urlunsplit
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -117,9 +118,12 @@ def process_signature(img_bytes, full_name, job_title, img_width=350, img_height
 def download_file(url):
     try:
         logging.info(f"Đang tải file từ URL: {url}")
-        response = requests.get(url)
+        # Loại bỏ fragment khỏi URL
+        split_url = urlsplit(url)
+        url_no_fragment = urlunsplit((split_url.scheme, split_url.netloc, split_url.path, split_url.query, ''))
+        response = requests.get(url_no_fragment)
         response.raise_for_status()
-        logging.info(f"Tải file từ URL: {url} thành công.")
+        logging.info(f"Tải file từ URL: {url_no_fragment} thành công.")
         return BytesIO(response.content)
     except Exception as e:
         logging.error(f"Lỗi khi tải file từ URL {url}: {e}")
@@ -169,11 +173,11 @@ def add_signature():
 
         for page_num in range(len(pdf_document)):
             page = pdf_document.load_page(page_num)
-            
+
             # Trích xuất và log toàn bộ văn bản của trang
             page_text = page.get_text("text")
             logging.info(f"Nội dung trang {page_num + 1}:\n{page_text}")
-            
+
             text_instances = page.search_for(placeholder_text)
             logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{placeholder_text}'")
 
@@ -201,7 +205,7 @@ def add_signature():
                     )
                     logging.info(f"Chèn chữ ký tại rect: {signature_rect}")
 
-                    # Insert the signature image at the found text location
+                    # Insert the signature image tại vị trí đã định
                     new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=True)
                     logging.info("Chữ ký đã được chèn vào PDF")
 
