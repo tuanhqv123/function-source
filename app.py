@@ -11,8 +11,20 @@ from pytz import timezone
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
+def get_font_path(font_name):
+    """
+    Trả về đường dẫn tuyệt đối tới tệp font trong thư mục fonts.
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    font_path = os.path.join(current_dir, 'fonts', font_name)
+    if not os.path.isfile(font_path):
+        logging.error(f"Không tìm thấy font tại đường dẫn: {font_path}")
+        return None
+    return font_path
+
 def process_signature(img_bytes, full_name, job_title, img_width=350, img_height=120, font_size=12):
     try:
+        logging.info("Bắt đầu xử lý chữ ký")
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
 
         # Tách nền trắng và chuyển chữ ký thành màu đỏ
@@ -34,18 +46,33 @@ def process_signature(img_bytes, full_name, job_title, img_width=350, img_height
         else:
             img_height = int(img_width / aspect_ratio)
         img = img.resize((int(img_width), int(img_height)), Image.Resampling.LANCZOS)
+        logging.info(f"Kích thước chữ ký sau khi resize: {img.size}")
 
         # Load the font (use fallback if Times New Roman not found)
         try:
-            font_path = os.path.join('fonts', 'times.ttf')
-            font = ImageFont.truetype(font_path, size=font_size)
+            font_path = get_font_path('times.ttf')
+            if font_path:
+                font = ImageFont.truetype(font_path, size=font_size)
+                logging.info(f"Sử dụng font từ: {font_path}")
+            else:
+                raise IOError
         except IOError:
-            logging.error("Không tìm thấy font Times New Roman, sử dụng font mặc định.")
-            font = ImageFont.truetype("DejaVuSans.ttf", size=font_size)  # Fallback to DejaVuSans
+            logging.error("Không tìm thấy font Times New Roman, sử dụng font fallback.")
+            try:
+                fallback_font_path = get_font_path('DejaVuSerif.ttf')
+                if fallback_font_path:
+                    font = ImageFont.truetype(fallback_font_path, size=font_size)
+                    logging.info(f"Sử dụng font fallback từ: {fallback_font_path}")
+                else:
+                    raise IOError
+            except IOError:
+                logging.error("Không tìm thấy font fallback DejaVuSerif.ttf. Sử dụng font mặc định.")
+                font = ImageFont.load_default()
 
         # Sử dụng múi giờ Việt Nam
         vietnam_tz = timezone('Asia/Ho_Chi_Minh')
         current_datetime = datetime.now(vietnam_tz).strftime("%H giờ, %M phút, Ngày %d, tháng %m, năm %Y")
+        logging.info(f"Thời gian hiện tại: {current_datetime}")
 
         dummy_img = Image.new('RGB', (1, 1))
         dummy_draw = ImageDraw.Draw(dummy_img)
@@ -80,6 +107,7 @@ def process_signature(img_bytes, full_name, job_title, img_width=350, img_height
 
         img_byte_arr = BytesIO()
         canvas.save(img_byte_arr, format='PNG')
+        logging.info("Chữ ký đã được xử lý và tạo thành công.")
 
         return img_byte_arr.getvalue()
     except Exception as e:
@@ -90,8 +118,8 @@ def download_file(url):
     try:
         logging.info(f"Đang tải file từ URL: {url}")
         response = requests.get(url)
-        logging.info(f"HTTP Status Code: {response.status_code}")
         response.raise_for_status()
+        logging.info(f"Tải file từ URL: {url} thành công.")
         return BytesIO(response.content)
     except Exception as e:
         logging.error(f"Lỗi khi tải file từ URL {url}: {e}")
@@ -127,17 +155,24 @@ def add_signature():
 
         processed_img_bytes = process_signature(signature_bytes, full_name, job_title)
 
+        # Kiểm tra phiên bản thư viện
+        import fitz
+        import PIL
+
+        logging.info(f"Phiên bản PyMuPDF: {fitz.__doc__}")
+        logging.info(f"Phiên bản Pillow: {PIL.__version__}")
+
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = fitz.open()
 
         placeholder_text = "ký tại đây"  # Text to search for
 
         for page_num in range(len(pdf_document)):
-            page = pdf_document[page_num]
-
-            # Search for the placeholder text on the current page
+            page = pdf_document.load_page(page_num)
             text_instances = page.search_for(placeholder_text)
+            logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{placeholder_text}'")
 
+            # Tạo một trang mới trong output_pdf
             new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
             new_page.show_pdf_page(page.rect, pdf_document, pno=page_num)
 
@@ -145,27 +180,38 @@ def add_signature():
                 logging.info(f"Found {len(text_instances)} instances of '{placeholder_text}' on page {page_num + 1}")
                 signature_img = Image.open(BytesIO(processed_img_bytes))
                 signature_width, signature_height = signature_img.size
+                logging.info(f"Kích thước ảnh chữ ký: {signature_width}x{signature_height}")
 
                 for rect in text_instances:
                     # Erase the placeholder text by drawing a white rectangle over it
                     new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))  # White rectangle to cover the text
+                    logging.info(f"Vẽ rectangle để che placeholder tại: {rect}")
 
-                    # Adjust the rectangle where the signature will be placed
+                    # Chuyển đổi kích thước từ pixel sang điểm (1 inch = 72 điểm)
+                    # Giả sử hình ảnh đã được xử lý với kích thước phù hợp
+                    # Fitz sử dụng điểm (points) để định vị
+                    # Bạn có thể cần điều chỉnh kích thước để phù hợp
+
+                    # Tạo Rect cho chữ ký tại vị trí của placeholder
                     signature_rect = fitz.Rect(
-                        rect.x0,  # Left of the found text
-                        rect.y0,  # Top of the found text
-                        rect.x0 + signature_width,  # Right edge of the signature
-                        rect.y0 + signature_height  # Bottom edge of the signature
+                        rect.x0,  # Left
+                        rect.y0,  # Top
+                        rect.x0 + signature_width,  # Right
+                        rect.y0 + signature_height  # Bottom
                     )
+                    logging.info(f"Chèn chữ ký tại rect: {signature_rect}")
 
                     # Insert the signature image at the found text location
-                    new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=False)
+                    new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=True)
+                    logging.info("Chữ ký đã được chèn vào PDF")
 
         pdf_document.close()
 
-        output_bytes = BytesIO(output_pdf.tobytes())
+        output_bytes = BytesIO()
+        output_pdf.save(output_bytes)
         output_pdf.close()
 
+        output_bytes.seek(0)
         logging.info("Trả về file PDF đã ký")
         return send_file(
             output_bytes,
