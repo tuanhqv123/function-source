@@ -169,6 +169,11 @@ def add_signature():
 
         for page_num in range(len(pdf_document)):
             page = pdf_document.load_page(page_num)
+            
+            # Trích xuất và log toàn bộ văn bản của trang
+            page_text = page.get_text("text")
+            logging.info(f"Nội dung trang {page_num + 1}:\n{page_text}")
+            
             text_instances = page.search_for(placeholder_text)
             logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{placeholder_text}'")
 
@@ -186,11 +191,6 @@ def add_signature():
                     # Erase the placeholder text by drawing a white rectangle over it
                     new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))  # White rectangle to cover the text
                     logging.info(f"Vẽ rectangle để che placeholder tại: {rect}")
-
-                    # Chuyển đổi kích thước từ pixel sang điểm (1 inch = 72 điểm)
-                    # Giả sử hình ảnh đã được xử lý với kích thước phù hợp
-                    # Fitz sử dụng điểm (points) để định vị
-                    # Bạn có thể cần điều chỉnh kích thước để phù hợp
 
                     # Tạo Rect cho chữ ký tại vị trí của placeholder
                     signature_rect = fitz.Rect(
@@ -224,5 +224,5 @@ def add_signature():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 4000))
+    port = int(os.environ.get("PORT", 10000))  # Đảm bảo sử dụng PORT từ môi trường Render
     app.run(host='0.0.0.0', port=port)
