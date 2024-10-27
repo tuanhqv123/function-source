@@ -23,25 +23,21 @@ def get_font_path(font_name):
         return None
     return font_path
 
-def process_signature(img_bytes, full_name, job_title, img_width=300, img_height=100, font_size=11):
-    """
-    Xử lý ảnh chữ ký: chuyển nền trắng thành trong suốt, chuyển màu chữ ký thành đỏ, resize ảnh,
-    thêm thông tin tên và chức vụ vào ảnh tạo thành ảnh chữ ký hoàn chỉnh.
-    """
+def process_signature(img_bytes, full_name, date_str, img_width=350, img_height=120, font_size=12):
     try:
         logging.info("Bắt đầu xử lý chữ ký")
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
 
-        # Tách nền trắng và chuyển chữ ký thành màu đỏ
+        # Tách nền trắng và chuyển chữ ký thành màu đen
         datas = img.getdata()
         newData = []
         for item in datas:
             # Kiểm tra nếu pixel gần màu trắng để làm trong suốt
             if item[0] > 240 and item[1] > 240 and item[2] > 240:
-                newData.append((255, 0, 0, 0))  # Trong suốt với màu đỏ không ảnh hưởng vì alpha=0
+                newData.append((0, 0, 0, 0))  # Trong suốt
             else:
-                # Chuyển đổi màu chữ ký thành đỏ, giữ nguyên độ trong suốt
-                newData.append((255, 0, 0, item[3]))
+                # Giữ nguyên màu chữ ký
+                newData.append(item)
         img.putdata(newData)
 
         original_width, original_height = img.size
@@ -74,44 +70,48 @@ def process_signature(img_bytes, full_name, job_title, img_width=300, img_height
                 logging.error("Không tìm thấy font fallback DejaVuSerif.ttf. Sử dụng font mặc định.")
                 font = ImageFont.load_default()
 
-        # Sử dụng múi giờ Việt Nam
-        vietnam_tz = timezone('Asia/Ho_Chi_Minh')
-        current_datetime = datetime.now(vietnam_tz).strftime("%H giờ, %M phút, Ngày %d, tháng %m, năm %Y")
-        logging.info(f"Thời gian hiện tại: {current_datetime}")
+        # Thông tin để hiển thị
+        signature_valid_text = "Signature valid"
+        signed_by_text = f"Signed by {full_name}"
+        date_text = f"Date: {date_str}"
 
+        # Tạo text box cho mỗi dòng
         dummy_img = Image.new('RGB', (1, 1))
         dummy_draw = ImageDraw.Draw(dummy_img)
-        datetime_bbox = dummy_draw.textbbox((0, 0), current_datetime, font=font)
-        name_bbox = dummy_draw.textbbox((0, 0), full_name, font=font)
-        job_title_bbox = dummy_draw.textbbox((0, 0), job_title, font=font)
+        signature_valid_bbox = dummy_draw.textbbox((0, 0), signature_valid_text, font=font)
+        signed_by_bbox = dummy_draw.textbbox((0, 0), signed_by_text, font=font)
+        date_bbox = dummy_draw.textbbox((0, 0), date_text, font=font)
 
-        datetime_size = (datetime_bbox[2] - datetime_bbox[0], datetime_bbox[3] - datetime_bbox[1])
-        name_size = (name_bbox[2] - name_bbox[0], name_bbox[3] - name_bbox[1])
-        job_title_size = (job_title_bbox[2] - job_title_bbox[0], job_title_bbox[3] - job_title_bbox[1])
+        signature_valid_size = (signature_valid_bbox[2] - signature_valid_bbox[0], signature_valid_bbox[3] - signature_valid_bbox[1])
+        signed_by_size = (signed_by_bbox[2] - signed_by_bbox[0], signed_by_bbox[3] - signed_by_bbox[1])
+        date_size = (date_bbox[2] - date_bbox[0], date_bbox[3] - date_bbox[1])
 
-        canvas_width = max(img_width, datetime_size[0], name_size[0], job_title_size[0]) + 40
-        canvas_height = datetime_size[1] + img_height + name_size[1] + job_title_size[1] + 70
+        # Tính toán kích thước canvas
+        canvas_width = max(img_width, signature_valid_size[0], signed_by_size[0], date_size[0]) + 40
+        canvas_height = img_height + signature_valid_size[1] + signed_by_size[1] + date_size[1] + 40
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
 
-        datetime_x = (canvas_width - datetime_size[0]) / 2
-        datetime_y = 10
-        draw.text((datetime_x, datetime_y), current_datetime, fill="black", font=font)
-
-        signature_x = (canvas_width - img_width) / 2
-        signature_y = datetime_y + datetime_size[1] + 10
+        # Vẽ chữ ký
+        signature_x = 20  # Căn lề trái cho chữ ký
+        signature_y = 10
         canvas.paste(img, (int(signature_x), int(signature_y)), img)
 
-        name_x = (canvas_width - name_size[0]) / 2
-        name_y = signature_y + img_height + 10
-        draw.text((name_x, name_y), full_name, fill="black", font=font)
+        # Vẽ các dòng văn bản
+        text_color = (255, 0, 0)  # Màu đỏ
+        text_left_margin = 20  # Lề trái cho văn bản
 
-        job_title_x = (canvas_width - job_title_size[0]) / 2
-        job_title_y = name_y + name_size[1] + 5
-        draw.text((job_title_x, job_title_y), job_title, fill="black", font=font)
+        signature_valid_y = signature_y + img_height + 10
+        draw.text((text_left_margin, signature_valid_y), signature_valid_text, fill=text_color, font=font)
+
+        signed_by_y = signature_valid_y + signature_valid_size[1] + 5
+        draw.text((text_left_margin, signed_by_y), signed_by_text, fill=text_color, font=font)
+
+        date_y = signed_by_y + signed_by_size[1] + 5
+        draw.text((text_left_margin, date_y), date_text, fill=text_color, font=font)
 
         img_byte_arr = BytesIO()
-        canvas.save(img_byte_arr, format='PNG', quality=100)
+        canvas.save(img_byte_arr, format='PNG')
         logging.info("Chữ ký đã được xử lý và tạo thành công.")
 
         return img_byte_arr.getvalue()
@@ -127,13 +127,6 @@ def download_file(url):
         url_no_fragment = urlunsplit((split_url.scheme, split_url.netloc, split_url.path, split_url.query, ''))
         response = requests.get(url_no_fragment)
         response.raise_for_status()
-
-        content_type = response.headers.get('Content-Type', '')
-        logging.info(f"Content-Type của phản hồi: {content_type}")
-        if 'application/pdf' not in content_type:
-            logging.error(f"URL không trả về PDF: {url_no_fragment}")
-            raise ValueError("URL không trả về PDF")
-
         logging.info(f"Tải file từ URL: {url_no_fragment} thành công.")
         return BytesIO(response.content)
     except Exception as e:
@@ -161,6 +154,10 @@ def add_signature():
             logging.error("Không nhận được chức vụ")
             return jsonify({"error": "Không nhận được chức vụ"}), 400
 
+        # Lấy ngày hiện tại
+        vietnam_tz = timezone('Asia/Ho_Chi_Minh')
+        date_str = datetime.now(vietnam_tz).strftime("%d/%m/%Y")
+
         logging.info(f"Nhận URL PDF: {pdf_url}")
         pdf_stream = download_file(pdf_url)
 
@@ -168,7 +165,7 @@ def add_signature():
         signature_stream = download_file(signature_url)
         signature_bytes = signature_stream.read()
 
-        processed_img_bytes = process_signature(signature_bytes, full_name, job_title)
+        processed_img_bytes = process_signature(signature_bytes, full_name, date_str)
 
         # Kiểm tra phiên bản thư viện
         import fitz
@@ -180,7 +177,7 @@ def add_signature():
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = fitz.open()
 
-        placeholder_text = "ký tại đây"  # Text to search for
+        placeholder_text = "Signature"  # Text to search for
 
         for page_num in range(len(pdf_document)):
             page = pdf_document.load_page(page_num)
