@@ -23,7 +23,7 @@ def get_font_path(font_name):
         return None
     return font_path
 
-def process_signature(img_bytes, full_name, date_str, img_width=350, img_height=120, font_size=12):
+def process_signature(img_bytes, full_name, job_title, date_str, img_width=350, img_height=120, font_size=12):
     try:
         logging.info("Bắt đầu xử lý chữ ký")
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
@@ -72,7 +72,8 @@ def process_signature(img_bytes, full_name, date_str, img_width=350, img_height=
 
         # Thông tin để hiển thị
         signature_valid_text = "Signature valid"
-        signed_by_text = f"Signed by {full_name}"
+        signed_by_text = f"Signed by: {full_name}"
+        title_text = f"Title: {job_title}"
         date_text = f"Date: {date_str}"
 
         # Tạo text box cho mỗi dòng
@@ -80,15 +81,17 @@ def process_signature(img_bytes, full_name, date_str, img_width=350, img_height=
         dummy_draw = ImageDraw.Draw(dummy_img)
         signature_valid_bbox = dummy_draw.textbbox((0, 0), signature_valid_text, font=font)
         signed_by_bbox = dummy_draw.textbbox((0, 0), signed_by_text, font=font)
+        title_bbox = dummy_draw.textbbox((0, 0), title_text, font=font)
         date_bbox = dummy_draw.textbbox((0, 0), date_text, font=font)
 
         signature_valid_size = (signature_valid_bbox[2] - signature_valid_bbox[0], signature_valid_bbox[3] - signature_valid_bbox[1])
         signed_by_size = (signed_by_bbox[2] - signed_by_bbox[0], signed_by_bbox[3] - signed_by_bbox[1])
+        title_size = (title_bbox[2] - title_bbox[0], title_bbox[3] - title_bbox[1])
         date_size = (date_bbox[2] - date_bbox[0], date_bbox[3] - date_bbox[1])
 
         # Tính toán kích thước canvas
-        canvas_width = max(img_width, signature_valid_size[0], signed_by_size[0], date_size[0]) + 40
-        canvas_height = img_height + signature_valid_size[1] + signed_by_size[1] + date_size[1] + 40
+        canvas_width = max(img_width, signature_valid_size[0], signed_by_size[0], title_size[0], date_size[0]) + 40
+        canvas_height = img_height + signature_valid_size[1] + signed_by_size[1] + title_size[1] + date_size[1] + 40
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
 
@@ -107,7 +110,10 @@ def process_signature(img_bytes, full_name, date_str, img_width=350, img_height=
         signed_by_y = signature_valid_y + signature_valid_size[1] + 5
         draw.text((text_left_margin, signed_by_y), signed_by_text, fill=text_color, font=font)
 
-        date_y = signed_by_y + signed_by_size[1] + 5
+        title_y = signed_by_y + signed_by_size[1] + 5
+        draw.text((text_left_margin, title_y), title_text, fill=text_color, font=font)
+
+        date_y = title_y + title_size[1] + 5
         draw.text((text_left_margin, date_y), date_text, fill=text_color, font=font)
 
         img_byte_arr = BytesIO()
@@ -154,9 +160,9 @@ def add_signature():
             logging.error("Không nhận được chức vụ")
             return jsonify({"error": "Không nhận được chức vụ"}), 400
 
-        # Lấy ngày hiện tại
+        # Lấy ngày và giờ hiện tại theo múi giờ Việt Nam
         vietnam_tz = timezone('Asia/Ho_Chi_Minh')
-        date_str = datetime.now(vietnam_tz).strftime("%d/%m/%Y")
+        date_str = datetime.now(vietnam_tz).strftime("%d/%m/%Y %H:%M")
 
         logging.info(f"Nhận URL PDF: {pdf_url}")
         pdf_stream = download_file(pdf_url)
@@ -165,7 +171,7 @@ def add_signature():
         signature_stream = download_file(signature_url)
         signature_bytes = signature_stream.read()
 
-        processed_img_bytes = process_signature(signature_bytes, full_name, date_str)
+        processed_img_bytes = process_signature(signature_bytes, full_name, job_title, date_str)
 
         # Kiểm tra phiên bản thư viện
         import fitz
