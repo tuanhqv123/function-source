@@ -13,9 +13,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 def get_font_path(font_name):
-    """
-    Trả về đường dẫn tuyệt đối tới tệp font trong thư mục fonts.
-    """
+    # Trả về đường dẫn tuyệt đối tới tệp font trong thư mục fonts.
     current_dir = os.path.dirname(os.path.abspath(__file__))
     font_path = os.path.join(current_dir, 'fonts', font_name)
     if not os.path.isfile(font_path):
@@ -23,12 +21,30 @@ def get_font_path(font_name):
         return None
     return font_path
 
-def process_signature(img_bytes, full_name, job_title, date_str, img_width=350, img_height=120, font_size=12):
+def process_signature(img_bytes, full_name, job_title, date_str, img_width=200, img_height=100, font_size=14):
+    """
+    Xử lý hình ảnh chữ ký:
+    - Loại bỏ nền trắng.
+    - Chuyển đổi thành hình ảnh RGBA với kích thước cố định.
+    - Thêm thông tin ký tên dưới chữ ký.
+    
+    Parameters:
+        img_bytes (bytes): Nội dung hình ảnh chữ ký.
+        full_name (str): Tên đầy đủ của người ký.
+        job_title (str): Chức vụ của người ký.
+        date_str (str): Ngày và giờ ký.
+        img_width (int): Chiều rộng chữ ký sau khi xử lý (pixels).
+        img_height (int): Chiều cao chữ ký sau khi xử lý (pixels).
+        font_size (int): Kích thước font chữ thông tin ký tên.
+    
+    Returns:
+        bytes: Nội dung hình ảnh chữ ký sau khi xử lý.
+    """
     try:
         logging.info("Bắt đầu xử lý chữ ký")
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
 
-        # Tách nền trắng và chuyển chữ ký thành màu đen
+        # Tách nền trắng và làm trong suốt
         datas = img.getdata()
         newData = []
         for item in datas:
@@ -40,16 +56,11 @@ def process_signature(img_bytes, full_name, job_title, date_str, img_width=350, 
                 newData.append(item)
         img.putdata(newData)
 
-        original_width, original_height = img.size
-        aspect_ratio = original_width / original_height
-        if (img_width / img_height) > aspect_ratio:
-            img_width = int(img_height * aspect_ratio)
-        else:
-            img_height = int(img_width / aspect_ratio)
-        img = img.resize((int(img_width), int(img_height)), Image.Resampling.LANCZOS)
+        # Resize chữ ký với kích thước cố định
+        img = img.resize((img_width, img_height), Image.Resampling.LANCZOS)
         logging.info(f"Kích thước chữ ký sau khi resize: {img.size}")
 
-        # Load the font (use fallback if Times New Roman not found)
+        # Load font (fallback nếu không tìm thấy)
         try:
             font_path = get_font_path('times.ttf')
             if font_path:
@@ -70,7 +81,7 @@ def process_signature(img_bytes, full_name, job_title, date_str, img_width=350, 
                 logging.error("Không tìm thấy font fallback DejaVuSerif.ttf. Sử dụng font mặc định.")
                 font = ImageFont.load_default()
 
-        # Thông tin để hiển thị
+        # Thông tin để hiển thị dưới chữ ký
         signature_valid_text = "Signature valid"
         signed_by_text = f"Signed by: {full_name}"
         title_text = f"Title: {job_title}"
@@ -89,14 +100,14 @@ def process_signature(img_bytes, full_name, job_title, date_str, img_width=350, 
         title_size = (title_bbox[2] - title_bbox[0], title_bbox[3] - title_bbox[1])
         date_size = (date_bbox[2] - date_bbox[0], date_bbox[3] - date_bbox[1])
 
-        # Tính toán kích thước canvas
+        # Tính toán kích thước canvas để chứa chữ ký và thông tin
         canvas_width = max(img_width, signature_valid_size[0], signed_by_size[0], title_size[0], date_size[0]) + 40
         canvas_height = img_height + signature_valid_size[1] + signed_by_size[1] + title_size[1] + date_size[1] + 40
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
 
         # Vẽ chữ ký
-        signature_x = 20  # Căn lề trái cho chữ ký
+        signature_x = 20  # Căn lề trái
         signature_y = 10
         canvas.paste(img, (int(signature_x), int(signature_y)), img)
 
@@ -145,24 +156,22 @@ def add_signature():
     try:
         pdf_url = request.form.get('pdf_url')
         signature_url = request.form.get('signature_url')
+        placeholder = request.form.get('placeholder', 'Signature')  # Placeholder mặc định là 'Signature'
+        full_name = request.form.get('full_name')
+        job_title = request.form.get('job_title')
 
+        # Kiểm tra các tham số bắt buộc
         if not pdf_url or not signature_url:
             logging.error("Không nhận được URL PDF hoặc URL chữ ký")
             return jsonify({"error": "Không nhận được URL PDF hoặc URL chữ ký"}), 400
 
-        full_name = request.form.get('full_name')
         if not full_name:
             logging.error("Không nhận được tên đầy đủ")
             return jsonify({"error": "Không nhận được tên đầy đủ"}), 400
 
-        job_title = request.form.get('job_title')
         if not job_title:
             logging.error("Không nhận được chức vụ")
             return jsonify({"error": "Không nhận được chức vụ"}), 400
-
-        # Lấy ngày và giờ hiện tại theo múi giờ Việt Nam
-        vietnam_tz = timezone('Asia/Ho_Chi_Minh')
-        date_str = datetime.now(vietnam_tz).strftime("%d/%m/%Y %H:%M")
 
         logging.info(f"Nhận URL PDF: {pdf_url}")
         pdf_stream = download_file(pdf_url)
@@ -170,6 +179,10 @@ def add_signature():
         logging.info(f"Nhận URL chữ ký: {signature_url}")
         signature_stream = download_file(signature_url)
         signature_bytes = signature_stream.read()
+
+        # Lấy ngày và giờ hiện tại theo múi giờ Việt Nam
+        vietnam_tz = timezone('Asia/Ho_Chi_Minh')
+        date_str = datetime.now(vietnam_tz).strftime("%d/%m/%Y %H:%M")
 
         processed_img_bytes = process_signature(signature_bytes, full_name, job_title, date_str)
 
@@ -183,7 +196,10 @@ def add_signature():
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = fitz.open()
 
-        placeholder_text = "Signature"  # Text to search for
+        logging.info(f"Placeholder để tìm kiếm: '{placeholder}'")
+
+        # Kích thước chữ ký cố định (được xây dựng trong process_signature)
+        # Không sử dụng scale_factor
 
         for page_num in range(len(pdf_document)):
             page = pdf_document.load_page(page_num)
@@ -192,17 +208,18 @@ def add_signature():
             page_text = page.get_text("text")
             logging.info(f"Nội dung trang {page_num + 1}:\n{page_text}")
 
-            text_instances = page.search_for(placeholder_text)
-            logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{placeholder_text}'")
+            text_instances = page.search_for(placeholder)
+            logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{placeholder}'")
 
             # Tạo một trang mới trong output_pdf
             new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
             new_page.show_pdf_page(page.rect, pdf_document, pno=page_num)
 
             if text_instances:
-                logging.info(f"Found {len(text_instances)} instances of '{placeholder_text}' on page {page_num + 1}")
+                logging.info(f"Tìm thấy {len(text_instances)} instances của '{placeholder}' trên trang {page_num + 1}")
                 signature_img = Image.open(BytesIO(processed_img_bytes))
-                signature_width, signature_height = signature_img.size
+                signature_width, signature_height = signature_img.size  # đã cố định tại 200x100
+
                 logging.info(f"Kích thước ảnh chữ ký: {signature_width}x{signature_height}")
 
                 for rect in text_instances:
@@ -210,13 +227,24 @@ def add_signature():
                     new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))  # White rectangle to cover the text
                     logging.info(f"Vẽ rectangle để che placeholder tại: {rect}")
 
-                    # Tạo Rect cho chữ ký tại vị trí của placeholder
+                    # Xác định vị trí để chèn chữ ký với kích thước cố định
+                    # Giữ nguyên kích thước đã định (200x100)
                     signature_rect = fitz.Rect(
                         rect.x0,  # Left
                         rect.y0,  # Top
                         rect.x0 + signature_width,  # Right
                         rect.y0 + signature_height  # Bottom
                     )
+
+                    # Nếu chữ ký vượt quá biên trang, điều chỉnh lại
+                    if signature_rect.x1 > page.rect.width - 20:
+                        signature_rect.x0 = page.rect.width - 20 - signature_width
+                        signature_rect.x1 = page.rect.width - 20
+
+                    if signature_rect.y1 > page.rect.height - 20:
+                        signature_rect.y0 = page.rect.height - 20 - signature_height
+                        signature_rect.y1 = page.rect.height - 20
+
                     logging.info(f"Chèn chữ ký tại rect: {signature_rect}")
 
                     # Insert the signature image tại vị trí đã định
