@@ -198,11 +198,12 @@ def add_signature():
 
         logging.info(f"Placeholder để tìm kiếm: '{placeholder}'")
 
-        # Kích thước chữ ký cố định (được xây dựng trong process_signature)
-        # Không sử dụng scale_factor
+        # Kích thước chữ ký cố định (đã xử lý trong process_signature)
+        signature_width = 200
+        signature_height = 100
 
         for page_num in range(len(pdf_document)):
-            page = pdf_document.load_page(page_num)
+            page = pdf_document[page_num]
 
             # Trích xuất và log toàn bộ văn bản của trang
             page_text = page.get_text("text")
@@ -213,41 +214,37 @@ def add_signature():
 
             # Tạo một trang mới trong output_pdf
             new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
-            new_page.show_pdf_page(page.rect, pdf_document, pno=page_num)
+            new_page.show_pdf_page(page.rect, pdf_document, page_num)
 
             if text_instances:
                 logging.info(f"Tìm thấy {len(text_instances)} instances của '{placeholder}' trên trang {page_num + 1}")
                 signature_img = Image.open(BytesIO(processed_img_bytes))
-                signature_width, signature_height = signature_img.size  # đã cố định tại 200x100
-
-                logging.info(f"Kích thước ảnh chữ ký: {signature_width}x{signature_height}")
 
                 for rect in text_instances:
-                    # Erase the placeholder text by drawing a white rectangle over it
-                    new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))  # White rectangle to cover the text
-                    logging.info(f"Vẽ rectangle để che placeholder tại: {rect}")
+                    # Che placeholder bằng hình chữ nhật trắng
+                    new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
+                    logging.info(f"Vẽ hình chữ nhật che placeholder tại: {rect}")
 
-                    # Xác định vị trí để chèn chữ ký với kích thước cố định
-                    # Giữ nguyên kích thước đã định (200x100)
+                    # Xác định vị trí chèn chữ ký (giữ nguyên kích thước 200x100)
                     signature_rect = fitz.Rect(
-                        rect.x0,  # Left
-                        rect.y0,  # Top
-                        rect.x0 + signature_width,  # Right
-                        rect.y0 + signature_height  # Bottom
+                        rect.x0,
+                        rect.y0,
+                        rect.x0 + signature_width,
+                        rect.y0 + signature_height
                     )
 
-                    # Nếu chữ ký vượt quá biên trang, điều chỉnh lại
-                    if signature_rect.x1 > page.rect.width - 20:
-                        signature_rect.x0 = page.rect.width - 20 - signature_width
-                        signature_rect.x1 = page.rect.width - 20
+                    # Điều chỉnh nếu chữ ký vượt quá biên trang
+                    if signature_rect.x1 > page.rect.width:
+                        signature_rect.x0 = page.rect.width - signature_width
+                        signature_rect.x1 = page.rect.width
 
-                    if signature_rect.y1 > page.rect.height - 20:
-                        signature_rect.y0 = page.rect.height - 20 - signature_height
-                        signature_rect.y1 = page.rect.height - 20
+                    if signature_rect.y1 > page.rect.height:
+                        signature_rect.y0 = page.rect.height - signature_height
+                        signature_rect.y1 = page.rect.height
 
                     logging.info(f"Chèn chữ ký tại rect: {signature_rect}")
 
-                    # Insert the signature image tại vị trí đã định
+                    # Chèn chữ ký đã xử lý vào vị trí đã định
                     new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=True)
                     logging.info("Chữ ký đã được chèn vào PDF")
 
@@ -270,5 +267,5 @@ def add_signature():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))  # Đảm bảo sử dụng PORT từ môi trường Render
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
