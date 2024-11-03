@@ -9,7 +9,7 @@ from datetime import datetime
 from pytz import timezone
 from urllib.parse import urlsplit, urlunsplit
 import sys  # Thêm import sys để cấu hình logging
-import pdfplumber
+from pdfminer.high_level import extract_text
 
 app = Flask(__name__)
 
@@ -159,7 +159,7 @@ def download_file(url):
         url_no_fragment = urlunsplit((split_url.scheme, split_url.netloc, split_url.path, split_url.query, ''))
         response = requests.get(url_no_fragment)
         response.raise_for_status()
-        logging.info(f"Tải file từ URL: {url_no_fragment} thành công.")
+        logging.info(f"Tải file t URL: {url_no_fragment} thành công.")
         return BytesIO(response.content)
     except Exception as e:
         logging.error(f"Lỗi khi tải file từ URL {url}: {e}")
@@ -186,22 +186,20 @@ def extract_and_clean_text(page):
         logging.error(f"Error extracting text: {e}")
         return ""
 
-def extract_and_clean_text_with_pdfplumber(pdf_stream):
+def extract_and_clean_text_with_pdfminer(pdf_stream):
     """
-    Extracts text from a PDF using pdfplumber and cleans it for consistent logging.
+    Extracts text from a PDF using pdfminer.six and cleans it for consistent logging.
     """
     try:
-        with pdfplumber.open(pdf_stream) as pdf:
-            full_text = []
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    # Clean and normalize text
-                    text = clean_text(text)
-                    full_text.append(text)
-            return "\n".join(full_text)
+        # Đọc nội dung PDF từ stream
+        pdf_stream.seek(0)  # Đảm bảo stream ở đầu
+        text = extract_text(pdf_stream)
+        if text:
+            # Clean and normalize text
+            text = clean_text(text)
+        return text
     except Exception as e:
-        logging.error(f"Error extracting text with pdfplumber: {e}")
+        logging.error(f"Error extracting text with pdfminer.six: {e}")
         return ""
 
 def clean_text(text):
@@ -240,7 +238,7 @@ def add_signature():
 
         if not job_title:
             logging.error("Không nhận được chức vụ")
-            return jsonify({"error": "Không nhận được chức v"}), 400
+            return jsonify({"error": "Không nhận được chức vụ"}), 400
 
         logging.info(f"Nhận URL PDF: {pdf_url}")
         pdf_stream = download_file(pdf_url)
@@ -255,8 +253,8 @@ def add_signature():
 
         processed_img_bytes = process_signature(signature_bytes, full_name, job_title, date_str)
 
-        # Sử dụng pdfplumber để trích xuất văn bản
-        page_text = extract_and_clean_text_with_pdfplumber(pdf_stream)
+        # Sử dụng pdfminer.six để trích xuất văn bản
+        page_text = extract_and_clean_text_with_pdfminer(pdf_stream)
         logging.info(f"Nội dung PDF:\n{page_text}")
 
         # Kiểm tra placeholder
