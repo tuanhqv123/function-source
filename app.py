@@ -8,9 +8,23 @@ import os
 from datetime import datetime
 from pytz import timezone
 from urllib.parse import urlsplit, urlunsplit
+import sys  # Thêm import sys để cấu hình logging
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
+
+# Cấu hình logging để đảm bảo mã hóa UTF-8
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Tạo handler với mã hóa UTF-8
+handler = logging.StreamHandler(stream=sys.stdout)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+
+# Tránh duplicate logs nếu handler đã tồn tại
+if not logger.handlers:
+    logger.addHandler(handler)
 
 def get_font_path(font_name):
     # Trả về đường dẫn tuyệt đối tới tệp font trong thư mục fonts.
