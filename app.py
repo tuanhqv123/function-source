@@ -223,7 +223,7 @@ def add_signature():
     try:
         pdf_url = request.form.get('pdf_url')
         signature_url = request.form.get('signature_url')
-        placeholder = request.form.get('placeholder', 'Signature')  # Placeholder mặc định là 'Signature'
+        placeholder = request.form.get('placeholder', 'Signature')
         full_name = request.form.get('full_name')
         job_title = request.form.get('job_title')
 
@@ -263,70 +263,29 @@ def add_signature():
         else:
             logging.info(f"Không tìm thấy placeholder '{placeholder}' trong văn bản PDF")
 
-        # Kiểm tra phiên bản thư viện
-        import fitz
-        import PIL
-
-        logging.info(f"Phiên bản PyMuPDF: {fitz.__doc__}")
-        logging.info(f"Phiên bản Pillow: {PIL.__version__}")
-
+        # Mở PDF với PyMuPDF để chèn chữ ký
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = fitz.open()
 
-        logging.info(f"Placeholder để tìm kiếm: '{placeholder}'")
-
-        # Kích thước chữ ký cố định (đã xử lý trong process_signature)
-        signature_width = 200
-        signature_height = 100
-
         for page_num in range(len(pdf_document)):
             page = pdf_document[page_num]
-
-            # Extract and clean text
-            page_text = extract_and_clean_text(page)
-            logging.info(f"Nội dung trang {page_num + 1}:\n{page_text}")
-
             text_instances = page.search_for(placeholder)
-            logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{placeholder}'")
-
-            # Tạo một trang mới trong output_pdf
-            new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
-            new_page.show_pdf_page(page.rect, pdf_document, page_num)
 
             if text_instances:
-                logging.info(f"Tìm thấy {len(text_instances)} instances của '{placeholder}' trên trang {page_num + 1}")
-                signature_img = Image.open(BytesIO(processed_img_bytes))
+                new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
+                new_page.show_pdf_page(page.rect, pdf_document, page_num)
 
                 for rect in text_instances:
-                    # Che placeholder bằng hình chữ nhật trắng
                     new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
-                    logging.info(f"Vẽ hình chữ nhật che placeholder tại: {rect}")
-
-                    # Xác định vị trí chèn chữ ký (giữ nguyên kích thước 200x100)
                     signature_rect = fitz.Rect(
                         rect.x0,
                         rect.y0,
-                        rect.x0 + signature_width,
-                        rect.y0 + signature_height
+                        rect.x0 + 200,
+                        rect.y0 + 100
                     )
-
-                    # Điều chỉnh nếu chữ ký vượt quá biên trang
-                    if signature_rect.x1 > page.rect.width:
-                        signature_rect.x0 = page.rect.width - signature_width
-                        signature_rect.x1 = page.rect.width
-
-                    if signature_rect.y1 > page.rect.height:
-                        signature_rect.y0 = page.rect.height - signature_height
-                        signature_rect.y1 = page.rect.height
-
-                    logging.info(f"Chèn chữ ký tại rect: {signature_rect}")
-
-                    # Chèn chữ ký đã xử lý vào vị trí đã định
                     new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=True)
-                    logging.info("Chữ ký đã được chèn vào PDF")
 
         pdf_document.close()
-
         output_bytes = BytesIO()
         output_pdf.save(output_bytes)
         output_pdf.close()
