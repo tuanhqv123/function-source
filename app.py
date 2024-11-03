@@ -243,7 +243,7 @@ def add_signature():
         logging.info(f"Nhận URL PDF: {pdf_url}")
         pdf_stream = download_file(pdf_url)
 
-        logging.info(f"Nhận URL chữ ký: {signature_url}")
+        logging.info(f"Nhận URL chữ k��: {signature_url}")
         signature_stream = download_file(signature_url)
         signature_bytes = signature_stream.read()
 
@@ -301,6 +301,29 @@ def add_signature():
     except Exception as e:
         logging.error(f"Lỗi trong add_signature: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/check_env_vars', methods=['GET'])
+def check_env_vars():
+    env_vars = {key: os.environ.get(key) for key in os.environ.keys()}
+    logging.info(f"Environment Variables: {env_vars}")
+    return jsonify(env_vars)
+
+@app.route('/check_environment', methods=['GET'])
+def check_environment():
+    import sys
+    import fitz
+    import PIL
+    import pdfminer
+
+    environment_info = {
+        "python_version": sys.version,
+        "pymupdf_version": fitz.__doc__,
+        "pillow_version": PIL.__version__,
+        "pdfminer_version": pdfminer.__version__,
+    }
+
+    logging.info(f"Environment Info: {environment_info}")
+    return jsonify(environment_info)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
