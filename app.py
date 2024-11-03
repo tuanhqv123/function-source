@@ -213,6 +213,7 @@ def clean_text(text):
     # Thay thế các ký tự đặc biệt và khoảng trắng
     text = text.replace('\u200b', ' ')  # Zero-width space
     text = text.replace('\ufeff', ' ')  # Zero-width no-break space
+    text = text.replace('\x01', ' ')    # Thay thế ký tự không mong muốn
     text = ' '.join(text.split())  # Chuẩn hóa khoảng trắng
     # Mã hóa và giải mã để đảm bảo UTF-8
     text = text.encode('utf-8', 'replace').decode('utf-8')
@@ -239,7 +240,7 @@ def add_signature():
 
         if not job_title:
             logging.error("Không nhận được chức vụ")
-            return jsonify({"error": "Không nhận được chức vụ"}), 400
+            return jsonify({"error": "Không nhận được chức v"}), 400
 
         logging.info(f"Nhận URL PDF: {pdf_url}")
         pdf_stream = download_file(pdf_url)
