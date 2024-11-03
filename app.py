@@ -9,6 +9,7 @@ from datetime import datetime
 from pytz import timezone
 from urllib.parse import urlsplit, urlunsplit
 import sys  # Thêm import sys để cấu hình logging
+import pdfplumber
 
 app = Flask(__name__)
 
@@ -185,6 +186,26 @@ def extract_and_clean_text(page):
         logging.error(f"Error extracting text: {e}")
         return ""
 
+def extract_and_clean_text_with_pdfplumber(pdf_stream):
+    """
+    Extracts text from a PDF using pdfplumber and cleans it for consistent logging.
+    """
+    try:
+        with pdfplumber.open(pdf_stream) as pdf:
+            full_text = []
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    # Clean and normalize text
+                    text = text.replace('\u200b', ' ')  # Zero-width space
+                    text = text.replace('\ufeff', ' ')  # Zero-width no-break space
+                    text = ' '.join(text.split())  # Normalize spaces
+                    full_text.append(text)
+            return "\n".join(full_text)
+    except Exception as e:
+        logging.error(f"Error extracting text with pdfplumber: {e}")
+        return ""
+
 @app.route('/add_signature', methods=['POST'])
 def add_signature():
     logging.info("Nhận yêu cầu tới /add_signature")
@@ -220,6 +241,16 @@ def add_signature():
         date_str = datetime.now(vietnam_tz).strftime("%d/%m/%Y %H:%M")
 
         processed_img_bytes = process_signature(signature_bytes, full_name, job_title, date_str)
+
+        # Sử dụng pdfplumber để trích xuất văn bản
+        page_text = extract_and_clean_text_with_pdfplumber(pdf_stream)
+        logging.info(f"Nội dung PDF:\n{page_text}")
+
+        # Kiểm tra placeholder
+        if placeholder in page_text:
+            logging.info(f"Tìm thấy placeholder '{placeholder}' trong văn bản PDF")
+        else:
+            logging.info(f"Không tìm thấy placeholder '{placeholder}' trong văn bản PDF")
 
         # Kiểm tra phiên bản thư viện
         import fitz
