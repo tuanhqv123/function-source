@@ -243,7 +243,7 @@ def add_signature():
         logging.info(f"Nhận URL PDF: {pdf_url}")
         pdf_stream = download_file(pdf_url)
 
-        logging.info(f"Nhận URL chữ k��: {signature_url}")
+        logging.info(f"Nhận URL chữ ký: {signature_url}")
         signature_stream = download_file(signature_url)
         signature_bytes = signature_stream.read()
 
@@ -271,10 +271,11 @@ def add_signature():
             page = pdf_document[page_num]
             text_instances = page.search_for(placeholder)
 
-            if text_instances:
-                new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
-                new_page.show_pdf_page(page.rect, pdf_document, page_num)
+            # Luôn tạo một trang mới trong output_pdf
+            new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
+            new_page.show_pdf_page(page.rect, pdf_document, page_num)
 
+            if text_instances:
                 for rect in text_instances:
                     new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
                     signature_rect = fitz.Rect(
@@ -307,23 +308,6 @@ def check_env_vars():
     env_vars = {key: os.environ.get(key) for key in os.environ.keys()}
     logging.info(f"Environment Variables: {env_vars}")
     return jsonify(env_vars)
-
-@app.route('/check_environment', methods=['GET'])
-def check_environment():
-    import sys
-    import fitz
-    import PIL
-    import pdfminer
-
-    environment_info = {
-        "python_version": sys.version,
-        "pymupdf_version": fitz.__doc__,
-        "pillow_version": PIL.__version__,
-        "pdfminer_version": pdfminer.__version__,
-    }
-
-    logging.info(f"Environment Info: {environment_info}")
-    return jsonify(environment_info)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
