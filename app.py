@@ -197,14 +197,26 @@ def extract_and_clean_text_with_pdfplumber(pdf_stream):
                 text = page.extract_text()
                 if text:
                     # Clean and normalize text
-                    text = text.replace('\u200b', ' ')  # Zero-width space
-                    text = text.replace('\ufeff', ' ')  # Zero-width no-break space
-                    text = ' '.join(text.split())  # Normalize spaces
+                    text = clean_text(text)
                     full_text.append(text)
             return "\n".join(full_text)
     except Exception as e:
         logging.error(f"Error extracting text with pdfplumber: {e}")
         return ""
+
+def clean_text(text):
+    """
+    Làm sạch văn bản, loại bỏ các ký tự không hợp lệ và chuẩn hóa khoảng trắng
+    """
+    if text is None:
+        return ""
+    # Thay thế các ký tự đặc biệt và khoảng trắng
+    text = text.replace('\u200b', ' ')  # Zero-width space
+    text = text.replace('\ufeff', ' ')  # Zero-width no-break space
+    text = ' '.join(text.split())  # Chuẩn hóa khoảng trắng
+    # Mã hóa và giải mã để đảm bảo UTF-8
+    text = text.encode('utf-8', 'replace').decode('utf-8')
+    return text
 
 @app.route('/add_signature', methods=['POST'])
 def add_signature():
