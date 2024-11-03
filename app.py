@@ -12,14 +12,18 @@ import sys  # Thêm import sys để cấu hình logging
 from pdfminer.high_level import extract_text
 
 app = Flask(__name__)
+app.config['JSON_AS_ASCII'] = False
+app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 
 # Cấu hình logging để đảm bảo mã hóa UTF-8
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Tạo handler với mã hóa UTF-8
-handler = logging.StreamHandler(stream=sys.stdout)
+handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.INFO)
+
+# Tạo formatter không có tham số encoding
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 
@@ -146,12 +150,12 @@ def process_signature(img_bytes, full_name, job_title, date_str, img_width=200, 
 def download_file(url):
     try:
         logging.info(f"Đang tải file từ URL: {url}")
-        # Loại bỏ fragment khỏi URL
         split_url = urlsplit(url)
         url_no_fragment = urlunsplit((split_url.scheme, split_url.netloc, split_url.path, split_url.query, ''))
         response = requests.get(url_no_fragment)
         response.raise_for_status()
-        logging.info(f"Tải file t URL: {url_no_fragment} thành công.")
+        response.encoding = 'utf-8'  # Đảm bảo mã hóa UTF-8
+        logging.info(f"Tải file từ URL: {url_no_fragment} thành công.")
         return BytesIO(response.content)
     except Exception as e:
         logging.error(f"Lỗi khi tải file từ URL {url}: {e}")
@@ -179,15 +183,11 @@ def extract_and_clean_text(page):
         return ""
 
 def extract_and_clean_text_with_pdfminer(pdf_stream):
-    """
-    Extracts text from a PDF using pdfminer.six and cleans it for consistent logging.
-    """
     try:
-        # Đọc nội dung PDF từ stream
-        pdf_stream.seek(0)  # Đảm bảo stream ở đầu
-        text = extract_text(pdf_stream)
+        pdf_stream.seek(0)
+        # Sử dụng codec UTF-8 để xử lý văn bản
+        text = extract_text(pdf_stream, codec='utf-8')
         if text:
-            # Clean and normalize text
             text = clean_text(text)
         return text
     except Exception as e:
@@ -195,18 +195,20 @@ def extract_and_clean_text_with_pdfminer(pdf_stream):
         return ""
 
 def clean_text(text):
-    """
-    Làm sạch văn bản, loại bỏ các ký tự không hợp lệ và chuẩn hóa khoảng trắng
-    """
     if text is None:
         return ""
-    # Thay thế các ký tự đặc biệt và khoảng trắng
-    text = text.replace('\u200b', ' ')  # Zero-width space
-    text = text.replace('\ufeff', ' ')  # Zero-width no-break space
-    text = text.replace('\x01', ' ')    # Thay thế ký tự không mong muốn
-    text = ' '.join(text.split())  # Chuẩn hóa khoảng trắng
-    # Mã hóa và giải mã để đảm bảo UTF-8
-    text = text.encode('utf-8', 'replace').decode('utf-8')
+    
+    # Encode và decode với UTF-8 ngay từ đầu
+    text = text.encode('utf-8', 'ignore').decode('utf-8')
+    
+    # Xử lý các ký tự đặc biệt
+    text = text.replace('\u200b', '')  # Zero-width space
+    text = text.replace('\ufeff', '')  # Zero-width no-break space
+    text = text.replace('\x01', '')    # Control character
+    
+    # Chuẩn hóa khoảng trắng
+    text = ' '.join(filter(None, text.split()))
+    
     return text
 
 @app.route('/add_signature', methods=['POST'])
