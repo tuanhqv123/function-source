@@ -37,24 +37,6 @@ def get_font_path(font_name):
     return font_path
 
 def process_signature(img_bytes, full_name, job_title, date_str, img_width=200, img_height=100, font_size=14):
-    """
-    Xử lý hình ảnh chữ ký:
-    - Loại bỏ nền trắng.
-    - Chuyển đổi thành hình ảnh RGBA với kích thước cố định.
-    - Thêm thông tin ký tên dưới chữ ký.
-    
-    Parameters:
-        img_bytes (bytes): Nội dung hình ảnh chữ ký.
-        full_name (str): Tên đầy đủ của người ký.
-        job_title (str): Chức vụ của người ký.
-        date_str (str): Ngày và giờ ký.
-        img_width (int): Chiều rộng chữ ký sau khi xử lý (pixels).
-        img_height (int): Chiều cao chữ ký sau khi xử lý (pixels).
-        font_size (int): Kích thước font chữ thông tin ký tên.
-    
-    Returns:
-        bytes: Nội dung hình ảnh chữ ký sau khi xử lý.
-    """
     try:
         logging.info("Bắt đầu xử lý chữ ký")
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
@@ -82,7 +64,17 @@ def process_signature(img_bytes, full_name, job_title, date_str, img_width=200, 
                 font = ImageFont.truetype(font_path, size=font_size)
                 logging.info(f"Sử dụng font từ: {font_path}")
             else:
-                raise IOError
+                logging.error("Không tìm thấy font Times New Roman, sử dụng font fallback.")
+                try:
+                    fallback_font_path = get_font_path('DejaVuSerif.ttf')
+                    if fallback_font_path:
+                        font = ImageFont.truetype(fallback_font_path, size=font_size)
+                        logging.info(f"Sử dụng font fallback từ: {fallback_font_path}")
+                    else:
+                        raise IOError
+                except IOError:
+                    logging.error("Không tìm thấy font fallback DejaVuSerif.ttf. Sử dụng font mặc định.")
+                    font = ImageFont.load_default()
         except IOError:
             logging.error("Không tìm thấy font Times New Roman, sử dụng font fallback.")
             try:
@@ -285,6 +277,8 @@ def add_signature():
                         rect.y0 + 100
                     )
                     new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=True)
+
+            logging.info(f"Đang xử lý trang {page_num + 1} của PDF")
 
         pdf_document.close()
         output_bytes = BytesIO()
