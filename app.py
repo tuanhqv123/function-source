@@ -221,7 +221,7 @@ def add_signature():
 
             # Trích xuất và log toàn bộ văn bản của trang
             page_text = page.get_text("text")
-            logging.info(f"Nội dung trang {page_num + 1}:\n{page_text.encode('utf-8', 'replace').decode('utf-8')}")
+            logging.info(f"Nội dung trang {page_num + 1}:\n{page_text}")
 
             text_instances = page.search_for(placeholder)
             logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{placeholder}'")
