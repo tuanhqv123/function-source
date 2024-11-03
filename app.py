@@ -164,6 +164,27 @@ def download_file(url):
         logging.error(f"Lỗi khi tải file từ URL {url}: {e}")
         raise
 
+def extract_and_clean_text(page):
+    """
+    Extracts text from a PDF page and cleans it for consistent logging.
+    """
+    try:
+        # Extract text using PyMuPDF
+        text = page.get_text("text")
+        
+        # Clean and normalize text
+        text = text.replace('\u200b', ' ')  # Zero-width space
+        text = text.replace('\ufeff', ' ')  # Zero-width no-break space
+        text = ' '.join(text.split())  # Normalize spaces
+        
+        # Encode and decode to ensure UTF-8 consistency
+        text = text.encode('utf-8', 'replace').decode('utf-8')
+        
+        return text
+    except Exception as e:
+        logging.error(f"Error extracting text: {e}")
+        return ""
+
 @app.route('/add_signature', methods=['POST'])
 def add_signature():
     logging.info("Nhận yêu cầu tới /add_signature")
@@ -219,9 +240,9 @@ def add_signature():
         for page_num in range(len(pdf_document)):
             page = pdf_document[page_num]
 
-            # Trích xuất và log toàn bộ văn bản của trang
-            page_text = page.get_text("text")
-            logging.info(f"Nội dung trang {page_num + 1}:\n{page_text.encode('utf-8', 'replace').decode('utf-8')}")
+            # Extract and clean text
+            page_text = extract_and_clean_text(page)
+            logging.info(f"Nội dung trang {page_num + 1}:\n{page_text}")
 
             text_instances = page.search_for(placeholder)
             logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{placeholder}'")
