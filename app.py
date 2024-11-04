@@ -8,28 +8,9 @@ import os
 from datetime import datetime
 from pytz import timezone
 from urllib.parse import urlsplit, urlunsplit
-import sys  # Thêm import sys để cấu hình logging
-from pdfminer.high_level import extract_text
 
 app = Flask(__name__)
-app.config['JSON_AS_ASCII'] = False
-app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
-
-# Cấu hình logging để đảm bảo mã hóa UTF-8
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-# Tạo handler với mã hóa UTF-8
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.INFO)
-
-# Tạo formatter không có tham số encoding
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-
-# Tránh duplicate logs nếu handler đã tồn tại
-if not logger.handlers:
-    logger.addHandler(handler)
+logging.basicConfig(level=logging.INFO)
 
 def get_font_path(font_name):
     # Trả về đường dẫn tuyệt đối tới tệp font trong thư mục fonts.
@@ -41,6 +22,24 @@ def get_font_path(font_name):
     return font_path
 
 def process_signature(img_bytes, full_name, job_title, date_str, img_width=200, img_height=100, font_size=14):
+    """
+    Xử lý hình ảnh chữ ký:
+    - Loại bỏ nền trắng.
+    - Chuyển đổi thành hình ảnh RGBA với kích thước cố định.
+    - Thêm thông tin ký tên dưới chữ ký.
+    
+    Parameters:
+        img_bytes (bytes): Nội dung hình ảnh chữ ký.
+        full_name (str): Tên đầy đủ của người ký.
+        job_title (str): Chức vụ của người ký.
+        date_str (str): Ngày và giờ ký.
+        img_width (int): Chiều rộng chữ ký sau khi xử lý (pixels).
+        img_height (int): Chiều cao chữ ký sau khi xử lý (pixels).
+        font_size (int): Kích thước font chữ thông tin ký tên.
+    
+    Returns:
+        bytes: Nội dung hình ảnh chữ ký sau khi xử lý.
+    """
     try:
         logging.info("Bắt đầu xử lý chữ ký")
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
@@ -68,17 +67,7 @@ def process_signature(img_bytes, full_name, job_title, date_str, img_width=200, 
                 font = ImageFont.truetype(font_path, size=font_size)
                 logging.info(f"Sử dụng font từ: {font_path}")
             else:
-                logging.error("Không tìm thấy font Times New Roman, sử dụng font fallback.")
-                try:
-                    fallback_font_path = get_font_path('DejaVuSerif.ttf')
-                    if fallback_font_path:
-                        font = ImageFont.truetype(fallback_font_path, size=font_size)
-                        logging.info(f"Sử dụng font fallback từ: {fallback_font_path}")
-                    else:
-                        raise IOError
-                except IOError:
-                    logging.error("Không tìm thấy font fallback DejaVuSerif.ttf. Sử dụng font mặc định.")
-                    font = ImageFont.load_default()
+                raise IOError
         except IOError:
             logging.error("Không tìm thấy font Times New Roman, sử dụng font fallback.")
             try:
@@ -150,66 +139,19 @@ def process_signature(img_bytes, full_name, job_title, date_str, img_width=200, 
 def download_file(url):
     try:
         logging.info(f"Đang tải file từ URL: {url}")
+        # Loại bỏ fragment khỏi URL
         split_url = urlsplit(url)
         url_no_fragment = urlunsplit((split_url.scheme, split_url.netloc, split_url.path, split_url.query, ''))
         response = requests.get(url_no_fragment)
         response.raise_for_status()
-        response.encoding = 'utf-8'  # Đảm bảo mã hóa UTF-8
         logging.info(f"Tải file từ URL: {url_no_fragment} thành công.")
         return BytesIO(response.content)
     except Exception as e:
         logging.error(f"Lỗi khi tải file từ URL {url}: {e}")
         raise
 
-def extract_and_clean_text(page):
-    """
-    Extracts text from a PDF page and cleans it for consistent logging.
-    """
-    try:
-        # Extract text using PyMuPDF
-        text = page.get_text("text")
-        
-        # Clean and normalize text
-        text = text.replace('\u200b', ' ')  # Zero-width space
-        text = text.replace('\ufeff', ' ')  # Zero-width no-break space
-        text = ' '.join(text.split())  # Normalize spaces
-        
-        # Encode and decode to ensure UTF-8 consistency
-        text = text.encode('utf-8', 'replace').decode('utf-8')
-        
-        return text
-    except Exception as e:
-        logging.error(f"Error extracting text: {e}")
-        return ""
-
-def extract_and_clean_text_with_pdfminer(pdf_stream):
-    try:
-        pdf_stream.seek(0)
-        # Sử dụng codec UTF-8 để xử lý văn bản
-        text = extract_text(pdf_stream, codec='utf-8')
-        if text:
-            text = clean_text(text)
-        return text
-    except Exception as e:
-        logging.error(f"Error extracting text with pdfminer.six: {e}")
-        return ""
-
-def clean_text(text):
-    if text is None:
-        return ""
-    
-    # Encode và decode với UTF-8 ngay từ đầu
-    text = text.encode('utf-8', 'ignore').decode('utf-8')
-    
-    # Xử lý các ký tự đặc biệt
-    text = text.replace('\u200b', '')  # Zero-width space
-    text = text.replace('\ufeff', '')  # Zero-width no-break space
-    text = text.replace('\x01', '')    # Control character
-    
-    # Chuẩn hóa khoảng trắng
-    text = ' '.join(filter(None, text.split()))
-    
-    return text
+def convert_placeholder(text):
+    return '�'.join(text.split())
 
 @app.route('/add_signature', methods=['POST'])
 def add_signature():
@@ -217,7 +159,7 @@ def add_signature():
     try:
         pdf_url = request.form.get('pdf_url')
         signature_url = request.form.get('signature_url')
-        placeholder = request.form.get('placeholder', 'Signature')
+        placeholder = request.form.get('placeholder', 'Signature')  # Placeholder mặc định là 'Signature'
         full_name = request.form.get('full_name')
         job_title = request.form.get('job_title')
 
@@ -247,42 +189,75 @@ def add_signature():
 
         processed_img_bytes = process_signature(signature_bytes, full_name, job_title, date_str)
 
-        # Sử dụng pdfminer.six để trích xuất văn bản
-        page_text = extract_and_clean_text_with_pdfminer(pdf_stream)
-        logging.info(f"Nội dung PDF:\n{page_text}")
+        # Kiểm tra phiên bản thư viện
+        import fitz
+        import PIL
 
-        # Kiểm tra placeholder
-        if placeholder in page_text:
-            logging.info(f"Tìm thấy placeholder '{placeholder}' trong văn bản PDF")
-        else:
-            logging.info(f"Không tìm thấy placeholder '{placeholder}' trong văn bản PDF")
+        logging.info(f"Phiên bản PyMuPDF: {fitz.__doc__}")
+        logging.info(f"Phiên bản Pillow: {PIL.__version__}")
 
-        # Mở PDF với PyMuPDF để chèn chữ ký
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = fitz.open()
 
-        for page_num in range(len(pdf_document)):
-            page = pdf_document[page_num]
-            text_instances = page.search_for(placeholder)
+        # Convert the placeholder
+        converted_placeholder = convert_placeholder(placeholder)
+        logging.info(f"Placeholder để tìm kiếm: '{converted_placeholder}'")
 
-            # Luôn tạo một trang mới trong output_pdf
+        # Kích thước chữ ký cố định (được xây dựng trong process_signature)
+        # Không sử dụng scale_factor
+
+        for page_num in range(len(pdf_document)):
+            page = pdf_document.load_page(page_num)
+
+            # Trích xuất và log toàn bộ văn bản của trang
+            page_text = page.get_text("text")
+            logging.info(f"Nội dung trang {page_num + 1}:\n{page_text}")
+
+            text_instances = page.search_for(converted_placeholder)
+            logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{converted_placeholder}'")
+
+            # Tạo một trang mới trong output_pdf
             new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
-            new_page.show_pdf_page(page.rect, pdf_document, page_num)
+            new_page.show_pdf_page(page.rect, pdf_document, pno=page_num)
 
             if text_instances:
-                for rect in text_instances:
-                    new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
-                    signature_rect = fitz.Rect(
-                        rect.x0,
-                        rect.y0,
-                        rect.x0 + 200,
-                        rect.y0 + 100
-                    )
-                    new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=True)
+                logging.info(f"Tìm thấy {len(text_instances)} instances của '{converted_placeholder}' trên trang {page_num + 1}")
+                signature_img = Image.open(BytesIO(processed_img_bytes))
+                signature_width, signature_height = signature_img.size  # đã cố định tại 200x100
 
-            logging.info(f"Đang xử lý trang {page_num + 1} của PDF")
+                logging.info(f"Kích thước ảnh chữ ký: {signature_width}x{signature_height}")
+
+                for rect in text_instances:
+                    # Erase the placeholder text by drawing a white rectangle over it
+                    new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))  # White rectangle to cover the text
+                    logging.info(f"Vẽ rectangle để che placeholder tại: {rect}")
+
+                    # Xác định vị trí để chèn chữ ký với kích thước cố định
+                    # Giữ nguyên kích thước đã định (200x100)
+                    signature_rect = fitz.Rect(
+                        rect.x0,  # Left
+                        rect.y0,  # Top
+                        rect.x0 + signature_width,  # Right
+                        rect.y0 + signature_height  # Bottom
+                    )
+
+                    # Nếu chữ ký vượt quá biên trang, điều chỉnh lại
+                    if signature_rect.x1 > page.rect.width - 20:
+                        signature_rect.x0 = page.rect.width - 20 - signature_width
+                        signature_rect.x1 = page.rect.width - 20
+
+                    if signature_rect.y1 > page.rect.height - 20:
+                        signature_rect.y0 = page.rect.height - 20 - signature_height
+                        signature_rect.y1 = page.rect.height - 20
+
+                    logging.info(f"Chèn chữ ký tại rect: {signature_rect}")
+
+                    # Insert the signature image tại vị trí đã định
+                    new_page.insert_image(signature_rect, stream=BytesIO(processed_img_bytes), overlay=True)
+                    logging.info("Chữ ký đã được chèn vào PDF")
 
         pdf_document.close()
+
         output_bytes = BytesIO()
         output_pdf.save(output_bytes)
         output_pdf.close()
@@ -298,13 +273,6 @@ def add_signature():
     except Exception as e:
         logging.error(f"Lỗi trong add_signature: {e}")
         return jsonify({"error": str(e)}), 500
-
-@app.route('/check_env_vars', methods=['GET'])
-def check_env_vars():
-    env_vars = {key: os.environ.get(key) for key in os.environ.keys()}
-    logging.info(f"Environment Variables: {env_vars}")
-    return jsonify(env_vars)
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 10000))  # Đảm bảo sử dụng PORT từ môi trường Render
     app.run(host='0.0.0.0', port=port)
