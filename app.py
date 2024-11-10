@@ -21,6 +21,51 @@ def get_font_path(font_name):
         return None
     return font_path
 
+def crop_signature(img):
+    """
+    Tự động cắt hình ảnh chữ ký để loại bỏ phần nền trắng dư thừa.
+    
+    Parameters:
+        img (PIL.Image.Image): Ảnh chữ ký đã được xử lý nền.
+    
+    Returns:
+        PIL.Image.Image: Ảnh chữ ký đã được cắt.
+    """
+    logging.info("Bắt đầu cắt chữ ký")
+    bbox = img.getbbox()
+    if bbox:
+        logging.info(f"Bounding box tìm thấy: {bbox}")
+        img_cropped = img.crop(bbox)
+    else:
+        logging.warning("Không tìm thấy chữ ký, sử dụng ảnh gốc.")
+        img_cropped = img
+    return img_cropped
+
+def resize_signature(img, max_height=70):
+    """
+    Tự động điều chỉnh kích thước chữ ký để đảm bảo chiều cao không vượt quá max_height.
+    Chiều rộng được điều chỉnh theo tỷ lệ để giữ nguyên tỷ lệ hình ảnh.
+    
+    Parameters:
+        img (PIL.Image.Image): Ảnh chữ ký đã được cắt.
+        max_height (int): Chiều cao tối đa của chữ ký (pixels).
+    
+    Returns:
+        PIL.Image.Image: Ảnh chữ ký đã được điều chỉnh kích thước.
+    """
+    logging.info(f"Kiểm tra kích thước chữ ký hiện tại: {img.size}")
+    width, height = img.size
+    if height > max_height:
+        scaling_factor = max_height / height
+        new_width = int(width * scaling_factor)
+        new_size = (new_width, max_height)
+        img_resized = img.resize(new_size, Image.LANCZOS)
+        logging.info(f"Điều chỉnh kích thước chữ ký thành: {img_resized.size}")
+        return img_resized
+    else:
+        logging.info("Kích thước chữ ký hợp lý, không cần điều chỉnh.")
+        return img
+
 def process_signature(img_bytes, full_name, job_title, date_str, font_size=14):
     try:
         logging.info("Bắt đầu xử lý chữ ký")
@@ -38,7 +83,15 @@ def process_signature(img_bytes, full_name, job_title, date_str, font_size=14):
                 newData.append(item)
         img.putdata(newData)
 
-        logging.info(f"Kích thước chữ ký giữ nguyên: {img.size}")
+        logging.info(f"Kích thước chữ ký sau khi tách nền: {img.size}")
+
+        # Cắt ảnh chữ ký để loại bỏ nền trắng dư thừa
+        img_cropped = crop_signature(img)
+        logging.info(f"Kích thước chữ ký sau khi cắt: {img_cropped.size}")
+
+        # Điều chỉnh kích thước chữ ký nếu cần
+        img_resized = resize_signature(img_cropped, max_height=70)
+        logging.info(f"Kích thước chữ ký sau khi điều chỉnh: {img_resized.size}")
 
         # Load font (fallback nếu không tìm thấy)
         try:
@@ -81,21 +134,21 @@ def process_signature(img_bytes, full_name, job_title, date_str, font_size=14):
         date_size = (date_bbox[2] - date_bbox[0], date_bbox[3] - date_bbox[1])
 
         # Tính toán kích thước canvas để chứa chữ ký và thông tin
-        canvas_width = max(img.width, signature_valid_size[0], signed_by_size[0], title_size[0], date_size[0]) + 40
-        canvas_height = img.height + signature_valid_size[1] + signed_by_size[1] + title_size[1] + date_size[1] + 40
+        canvas_width = max(img_resized.width, signature_valid_size[0], signed_by_size[0], title_size[0], date_size[0]) + 40
+        canvas_height = img_resized.height + signature_valid_size[1] + signed_by_size[1] + title_size[1] + date_size[1] + 40
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
 
         # Vẽ chữ ký
         signature_x = 0  # Căn lề trái
         signature_y = 5
-        canvas.paste(img, (int(signature_x), int(signature_y)), img)
+        canvas.paste(img_resized, (int(signature_x), int(signature_y)), img_resized)
 
         # Vẽ các dòng văn bản
         text_color = (255, 0, 0)  # Màu đỏ
         text_left_margin = 0  # Lề trái cho văn bản
 
-        signature_valid_y = signature_y + img.height + 5
+        signature_valid_y = signature_y + img_resized.height + 5
         draw.text((text_left_margin, signature_valid_y), signature_valid_text, fill=text_color, font=font)
 
         signed_by_y = signature_valid_y + signature_valid_size[1] + 5
@@ -178,9 +231,6 @@ def add_signature():
 
         logging.info(f"Placeholder để tìm kiếm: '{placeholder}'")
 
-        # Kích thước chữ ký cố định (được xây dựng trong process_signature)
-        # Không sử dụng scale_factor
-
         for page_num in range(len(pdf_document)):
             page = pdf_document.load_page(page_num)
 
@@ -198,7 +248,7 @@ def add_signature():
             if text_instances:
                 logging.info(f"Tìm thấy {len(text_instances)} instances của '{placeholder}' trên trang {page_num + 1}")
                 signature_img = Image.open(BytesIO(processed_img_bytes))
-                signature_width, signature_height = signature_img.size  # đã cố định tại 200x100
+                signature_width, signature_height = signature_img.size  # Kích thước đã được cắt và điều chỉnh
 
                 logging.info(f"Kích thước ảnh chữ ký: {signature_width}x{signature_height}")
 
@@ -207,8 +257,7 @@ def add_signature():
                     new_page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))  # White rectangle to cover the text
                     logging.info(f"Vẽ rectangle để che placeholder tại: {rect}")
 
-                    # Xác định vị trí để chèn chữ ký với kích thước cố định
-                    # Giữ nguyên kích thước đã định (200x100)
+                    # Xác định vị trí để chèn chữ ký với kích thước đã cắt và điều chỉnh
                     signature_rect = fitz.Rect(
                         rect.x0,  # Left
                         rect.y0,  # Top
