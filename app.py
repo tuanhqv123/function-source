@@ -21,25 +21,7 @@ def get_font_path(font_name):
         return None
     return font_path
 
-def process_signature(img_bytes, full_name, job_title, date_str, img_width=200, img_height=100, font_size=14):
-    """
-    Xử lý hình ảnh chữ ký:
-    - Loại bỏ nền trắng.
-    - Chuyển đổi thành hình ảnh RGBA với kích thước cố định.
-    - Thêm thông tin ký tên dưới chữ ký.
-    
-    Parameters:
-        img_bytes (bytes): Nội dung hình ảnh chữ ký.
-        full_name (str): Tên đầy đủ của người ký.
-        job_title (str): Chức vụ của người ký.
-        date_str (str): Ngày và giờ ký.
-        img_width (int): Chiều rộng chữ ký sau khi xử lý (pixels).
-        img_height (int): Chiều cao chữ ký sau khi xử lý (pixels).
-        font_size (int): Kích thước font chữ thông tin ký tên.
-    
-    Returns:
-        bytes: Nội dung hình ảnh chữ ký sau khi xử lý.
-    """
+def process_signature(img_bytes, full_name, job_title, date_str, font_size=14):
     try:
         logging.info("Bắt đầu xử lý chữ ký")
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
@@ -56,9 +38,7 @@ def process_signature(img_bytes, full_name, job_title, date_str, img_width=200, 
                 newData.append(item)
         img.putdata(newData)
 
-        # Resize chữ ký với kích thước cố định
-        img = img.resize((img_width, img_height), Image.Resampling.LANCZOS)
-        logging.info(f"Kích thước chữ ký sau khi resize: {img.size}")
+        logging.info(f"Kích thước chữ ký giữ nguyên: {img.size}")
 
         # Load font (fallback nếu không tìm thấy)
         try:
@@ -101,21 +81,21 @@ def process_signature(img_bytes, full_name, job_title, date_str, img_width=200, 
         date_size = (date_bbox[2] - date_bbox[0], date_bbox[3] - date_bbox[1])
 
         # Tính toán kích thước canvas để chứa chữ ký và thông tin
-        canvas_width = max(img_width, signature_valid_size[0], signed_by_size[0], title_size[0], date_size[0]) + 40
-        canvas_height = img_height + signature_valid_size[1] + signed_by_size[1] + title_size[1] + date_size[1] + 40
+        canvas_width = max(img.width, signature_valid_size[0], signed_by_size[0], title_size[0], date_size[0]) + 40
+        canvas_height = img.height + signature_valid_size[1] + signed_by_size[1] + title_size[1] + date_size[1] + 40
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
 
         # Vẽ chữ ký
-        signature_x = 20  # Căn lề trái
-        signature_y = 10
+        signature_x = 0  # Căn lề trái
+        signature_y = 5
         canvas.paste(img, (int(signature_x), int(signature_y)), img)
 
         # Vẽ các dòng văn bản
         text_color = (255, 0, 0)  # Màu đỏ
-        text_left_margin = 20  # Lề trái cho văn bản
+        text_left_margin = 0  # Lề trái cho văn bản
 
-        signature_valid_y = signature_y + img_height + 10
+        signature_valid_y = signature_y + img.height + 5
         draw.text((text_left_margin, signature_valid_y), signature_valid_text, fill=text_color, font=font)
 
         signed_by_y = signature_valid_y + signature_valid_size[1] + 5
@@ -149,9 +129,6 @@ def download_file(url):
     except Exception as e:
         logging.error(f"Lỗi khi tải file từ URL {url}: {e}")
         raise
-
-def convert_placeholder(text):
-    return '�'.join(text.split())
 
 @app.route('/add_signature', methods=['POST'])
 def add_signature():
@@ -199,9 +176,7 @@ def add_signature():
         pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
         output_pdf = fitz.open()
 
-        # Convert the placeholder
-        converted_placeholder = convert_placeholder(placeholder)
-        logging.info(f"Placeholder để tìm kiếm: '{converted_placeholder}'")
+        logging.info(f"Placeholder để tìm kiếm: '{placeholder}'")
 
         # Kích thước chữ ký cố định (được xây dựng trong process_signature)
         # Không sử dụng scale_factor
@@ -213,15 +188,15 @@ def add_signature():
             page_text = page.get_text("text")
             logging.info(f"Nội dung trang {page_num + 1}:\n{page_text}")
 
-            text_instances = page.search_for(converted_placeholder)
-            logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{converted_placeholder}'")
+            text_instances = page.search_for(placeholder)
+            logging.info(f"Trang {page_num + 1}: tìm thấy {len(text_instances)} lần '{placeholder}'")
 
             # Tạo một trang mới trong output_pdf
             new_page = output_pdf.new_page(width=page.rect.width, height=page.rect.height)
             new_page.show_pdf_page(page.rect, pdf_document, pno=page_num)
 
             if text_instances:
-                logging.info(f"Tìm thấy {len(text_instances)} instances của '{converted_placeholder}' trên trang {page_num + 1}")
+                logging.info(f"Tìm thấy {len(text_instances)} instances của '{placeholder}' trên trang {page_num + 1}")
                 signature_img = Image.open(BytesIO(processed_img_bytes))
                 signature_width, signature_height = signature_img.size  # đã cố định tại 200x100
 
@@ -273,6 +248,7 @@ def add_signature():
     except Exception as e:
         logging.error(f"Lỗi trong add_signature: {e}")
         return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))  # Đảm bảo sử dụng PORT từ môi trường Render
     app.run(host='0.0.0.0', port=port)
