@@ -63,7 +63,7 @@ def resize_signature(img, max_height=70):
         logging.info(f"Điều chỉnh kích thước chữ ký thành: {img_resized.size}")
         return img_resized
     else:
-        logging.info("Kích thước chữ ký hợp lý, không cần điều chỉnh.")
+        logging.info("Kích thước ch ký hợp lý, không cần điều chỉnh.")
         return img
 
 def process_signature(img_bytes, full_name, job_title, date_str, font_size=14):
@@ -134,31 +134,37 @@ def process_signature(img_bytes, full_name, job_title, date_str, font_size=14):
         date_size = (date_bbox[2] - date_bbox[0], date_bbox[3] - date_bbox[1])
 
         # Tính toán kích thước canvas để chứa chữ ký và thông tin
-        canvas_width = max(img_resized.width, signature_valid_size[0], signed_by_size[0], title_size[0], date_size[0]) + 40
-        canvas_height = img_resized.height + signature_valid_size[1] + signed_by_size[1] + title_size[1] + date_size[1] + 40
+        canvas_width = max(img_resized.width, signed_by_size[0], signature_valid_size[0], title_size[0], date_size[0]) + 40
+        canvas_height = img_resized.height + signed_by_size[1] + signature_valid_size[1] + title_size[1] + date_size[1] + 60  # Thêm khoảng cách
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
+
+        # Khởi tạo biến lề trái
+        text_left_margin = 20  # Hoặc giá trị bạn muốn
 
         # Vẽ chữ ký
         signature_x = 0  # Căn lề trái
         signature_y = 5
         canvas.paste(img_resized, (int(signature_x), int(signature_y)), img_resized)
 
-        # Vẽ các dòng văn bản
-        text_color = (255, 0, 0)  # Màu đỏ
-        text_left_margin = 0  # Lề trái cho văn bản
+        # Vẽ tên đầy đủ
+        full_name_y = signature_y + img_resized.height + 5
+        draw.text((text_left_margin, full_name_y), full_name, fill=(0, 0, 0), font=font)  # Vẽ tên đầy đủ
 
-        signature_valid_y = signature_y + img_resized.height + 5
-        draw.text((text_left_margin, signature_valid_y), signature_valid_text, fill=text_color, font=font)
+        # Vẽ các dòng văn bản
+        text_color_red = (255, 0, 0)  # Màu đỏ cho các thông tin khác
+
+        signature_valid_y = full_name_y + 20  # Căn lề dưới
+        draw.text((text_left_margin, signature_valid_y), signature_valid_text, fill=text_color_red, font=font)
 
         signed_by_y = signature_valid_y + signature_valid_size[1] + 5
-        draw.text((text_left_margin, signed_by_y), signed_by_text, fill=text_color, font=font)
+        draw.text((text_left_margin, signed_by_y), signed_by_text, fill=text_color_red, font=font)
 
         title_y = signed_by_y + signed_by_size[1] + 5
-        draw.text((text_left_margin, title_y), title_text, fill=text_color, font=font)
+        draw.text((text_left_margin, title_y), title_text, fill=text_color_red, font=font)
 
         date_y = title_y + title_size[1] + 5
-        draw.text((text_left_margin, date_y), date_text, fill=text_color, font=font)
+        draw.text((text_left_margin, date_y), date_text, fill=text_color_red, font=font)
 
         img_byte_arr = BytesIO()
         canvas.save(img_byte_arr, format='PNG')
