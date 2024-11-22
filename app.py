@@ -66,7 +66,7 @@ def resize_signature(img, max_height=70):
         logging.info("Kích thước ch ký hợp lý, không cần điều chỉnh.")
         return img
 
-def process_signature(img_bytes, full_name, job_title, date_str, font_size=12):
+def process_signature(img_bytes, full_name, job_title, date_str, font_size=10):
     try:
         logging.info("Bắt đầu xử lý chữ ký")
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
@@ -102,7 +102,7 @@ def process_signature(img_bytes, full_name, job_title, date_str, font_size=12):
             else:
                 raise IOError
         except IOError:
-            logging.error("Không tìm thấy font Times New Roman, sử dụng font fallback.")
+            logging.error("Không tìm thấy font Helvetica, sử dụng font fallback.")
             try:
                 fallback_font_path = get_font_path('DejaVuSerif.ttf')
                 if fallback_font_path:
