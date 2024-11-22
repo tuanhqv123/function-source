@@ -66,7 +66,7 @@ def resize_signature(img, max_height=70):
         logging.info("Kích thước ch ký hợp lý, không cần điều chỉnh.")
         return img
 
-def process_signature(img_bytes, full_name, job_title, date_str, font_size=14):
+def process_signature(img_bytes, full_name, job_title, date_str, font_size=12):
     try:
         logging.info("Bắt đầu xử lý chữ ký")
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
@@ -95,7 +95,7 @@ def process_signature(img_bytes, full_name, job_title, date_str, font_size=14):
 
         # Load font (fallback nếu không tìm thấy)
         try:
-            font_path = get_font_path('times.ttf')
+            font_path = get_font_path('Helvetica.ttf')
             if font_path:
                 font = ImageFont.truetype(font_path, size=font_size)
                 logging.info(f"Sử dụng font từ: {font_path}")
