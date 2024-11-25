@@ -99,29 +99,39 @@ def process_signature(img_bytes):
         logging.error(f"Lỗi trong process_signature: {e}")
         raise
 
-def create_signature_info(full_name, job_title, date_str, font_size=11):
-    """Tạo ảnh chứa thông tin signature với độ phân giải cao"""
+def create_signature_info(full_name, job_title, date_str):
+    """
+    Tạo ảnh chứa thông tin chữ ký với kích thước font khác nhau:
+    - Họ và Tên: Font size 12
+    - Các thông tin khác: Font size 11
+    """
     try:
         # Tăng scale để có độ phân giải cao hơn
         scale_factor = 3
-        font_size_scaled = font_size * scale_factor
+
+        # Kích thước font
+        font_size_name = 12 * scale_factor  # Font size cho Họ và Tên
+        font_size_others = 11 * scale_factor  # Font size cho Chức vụ, Signature valid, và Ngày
 
         # Load font
         try:
             font_path = get_font_path('Helvetica.ttf')
             if font_path:
-                font = ImageFont.truetype(font_path, size=font_size_scaled)
+                font_name = ImageFont.truetype(font_path, size=font_size_name)
+                font_others = ImageFont.truetype(font_path, size=font_size_others)
             else:
                 raise IOError
         except IOError:
             try:
                 fallback_font_path = get_font_path('DejaVuSerif.ttf')
                 if fallback_font_path:
-                    font = ImageFont.truetype(fallback_font_path, size=font_size_scaled)
+                    font_name = ImageFont.truetype(fallback_font_path, size=font_size_name)
+                    font_others = ImageFont.truetype(fallback_font_path, size=font_size_others)
                 else:
                     raise IOError
             except IOError:
-                font = ImageFont.load_default()
+                font_name = ImageFont.load_default()
+                font_others = ImageFont.load_default()
 
         # Thông tin để hiển thị
         name_text = full_name
@@ -133,13 +143,13 @@ def create_signature_info(full_name, job_title, date_str, font_size=11):
         # Tạo text box cho mỗi dòng với kích thước được scale
         dummy_img = Image.new('RGB', (1, 1))
         dummy_draw = ImageDraw.Draw(dummy_img)
-        name_bbox = dummy_draw.textbbox((0, 0), name_text, font=font)
-        signature_valid_bbox = dummy_draw.textbbox((0, 0), signature_valid_text, font=font)
-        signed_by_bbox = dummy_draw.textbbox((0, 0), signed_by_text, font=font)
-        title_bbox = dummy_draw.textbbox((0, 0), title_text, font=font)
-        date_bbox = dummy_draw.textbbox((0, 0), date_text, font=font)
+        name_bbox = dummy_draw.textbbox((0, 0), name_text, font=font_name)
+        signature_valid_bbox = dummy_draw.textbbox((0, 0), signature_valid_text, font=font_others)
+        signed_by_bbox = dummy_draw.textbbox((0, 0), signed_by_text, font=font_others)
+        title_bbox = dummy_draw.textbbox((0, 0), title_text, font=font_others)
+        date_bbox = dummy_draw.textbbox((0, 0), date_text, font=font_others)
 
-        # Tính toán kích thước canvas với scale
+        # Tính toán kích thước canvas
         canvas_width = max(
             name_bbox[2],
             signature_valid_bbox[2],
@@ -151,8 +161,8 @@ def create_signature_info(full_name, job_title, date_str, font_size=11):
         canvas_height = (
             name_bbox[3] +
             signature_valid_bbox[3] +
-            title_bbox[3] +
             signed_by_bbox[3] +
+            title_bbox[3] +
             date_bbox[3]
         ) + (45 * scale_factor)
 
@@ -160,23 +170,23 @@ def create_signature_info(full_name, job_title, date_str, font_size=11):
         canvas = Image.new('RGBA', (int(canvas_width), int(canvas_height)), (255, 255, 255, 0))
         draw = ImageDraw.Draw(canvas)
 
-        # Vẽ tên đầy đủ với màu đen
+        # Vẽ tên đầy đủ với màu đen (font size 12)
         y_pos = 5 * scale_factor
-        draw.text((20 * scale_factor, y_pos), name_text, fill=(0, 0, 0), font=font, stroke_width=0)
+        draw.text((20 * scale_factor, y_pos), name_text, fill=(0, 0, 0), font=font_name, stroke_width=0)
         
         # Tăng khoảng cách trước "Signature valid"
         y_pos += name_bbox[3] + (15 * scale_factor)
 
-        # Vẽ các dòng thông tin signature với màu đỏ
+        # Vẽ các dòng thông tin signature với màu đỏ (font size 11)
         text_color_red = (255, 0, 0)
         line_spacing = 3 * scale_factor
         
         for text in [signature_valid_text, signed_by_text, title_text, date_text]:
             draw.text((20 * scale_factor, y_pos), text, 
                      fill=text_color_red, 
-                     font=font,
+                     font=font_others,
                      stroke_width=0)  # Tắt stroke để chữ nét hơn
-            bbox = draw.textbbox((0, 0), text, font=font)
+            bbox = draw.textbbox((0, 0), text, font=font_others)
             y_pos += bbox[3] + line_spacing
 
         # Scale xuống kích thước gốc với chất lượng cao
