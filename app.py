@@ -99,7 +99,7 @@ def process_signature(img_bytes):
         logging.error(f"Lỗi trong process_signature: {e}")
         raise
 
-def create_signature_info(full_name, job_title, date_str, font_size=12):
+def create_signature_info(full_name, job_title, date_str, font_size=11):
     """Tạo ảnh chứa thông tin signature với độ phân giải cao"""
     try:
         # Tăng scale để có độ phân giải cao hơn
